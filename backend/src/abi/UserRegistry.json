@@ -1,0 +1,49 @@
+[
+  {
+    "type": "function",
+    "name": "getUserProfile",
+    "inputs": [{ "name": "user", "type": "address" }],
+    "outputs": [
+      { "name": "level", "type": "uint8" },
+      { "name": "ensName", "type": "string" },
+      { "name": "hasDeposited", "type": "bool" },
+      { "name": "registrationTime", "type": "uint256" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isVerifiedHuman",
+    "inputs": [{ "name": "user", "type": "address" }],
+    "outputs": [{ "name": "", "type": "bool" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAttestations",
+    "inputs": [{ "name": "user", "type": "address" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple[]",
+        "components": [
+          { "name": "attestationId", "type": "uint256" },
+          { "name": "attestationType", "type": "uint8" },
+          { "name": "referenceId", "type": "uint256" },
+          { "name": "timestamp", "type": "uint256" },
+          { "name": "issuer", "type": "address" },
+          { "name": "metadata", "type": "string" },
+          { "name": "isPositive", "type": "bool" }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAttestationCount",
+    "inputs": [{ "name": "user", "type": "address" }],
+    "outputs": [{ "name": "", "type": "uint256" }],
+    "stateMutability": "view"
+  }
+]
