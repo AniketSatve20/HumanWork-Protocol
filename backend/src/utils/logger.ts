@@ -17,14 +17,18 @@ export const logger = winston.createLogger({
     new winston.transports.Console({
       format: combine(colorize(), logFormat),
     }),
-    new winston.transports.File({ 
-      filename: 'logs/error.log', 
-      level: 'error' 
-    }),
-    new winston.transports.File({ 
-      filename: 'logs/combined.log' 
-    }),
   ],
 });
+
+// Add file transports only in non-test environments
+if (process.env.NODE_ENV !== 'test') {
+  logger.add(new winston.transports.File({ 
+    filename: 'logs/error.log', 
+    level: 'error' 
+  }));
+  logger.add(new winston.transports.File({ 
+    filename: 'logs/combined.log' 
+  }));
+}
 
 export default logger;

@@ -1,16 +1,9 @@
-import { ethers, Contract, EventLog, Log } from 'ethers';
-import { logger } from '../utils/logger';
-import { aiService } from '../modules/ai/huggingface';
-import AIOracleABI from '../abi/AIOracle.json'; 
-import SkillTrialABI from '../abi/SkillTrial.json';
+import { ethers, Contract } from 'ethers';
+import { config } from '../config/index.js';
+import { logger } from '../utils/logger.js';
+import { aiService } from '../services/ai.service.js';
+import AIOracleABI from '../abi/AIOracle.json' with { type: 'json' };
 
-const RPC_URL = process.env.HEDERA_RPC_URL || 'https://testnet.hashio.io/api';
-const AI_ORACLE_ADDRESS = process.env.AI_ORACLE_ADDRESS || '';
-const SKILL_TRIAL_ADDRESS = process.env.SKILL_TRIAL_ADDRESS || '';
-const PRIVATE_KEY = process.env.ORACLE_PRIVATE_KEY || '';
-const CHAIN_ID = parseInt(process.env.HEDERA_CHAIN_ID || '296');
-
-// Job types enum
 enum JobType {
   GST_VERIFICATION = 0,
   SKILL_GRADING = 1,
@@ -25,7 +18,7 @@ export class OracleWorker {
   private lastProcessedBlock = 0;
 
   async start() {
-    if (!AI_ORACLE_ADDRESS || !PRIVATE_KEY) {
+    if (!config.contracts.aiOracle || !config.oracle.privateKey) {
       logger.warn('⚠️ AI Worker skipped: Missing AI_ORACLE_ADDRESS or ORACLE_PRIVATE_KEY');
       return; 
     }
@@ -33,15 +26,14 @@ export class OracleWorker {
     logger.info('🤖 Starting AI Oracle Worker...');
 
     try {
-      const network = new ethers.Network("hedera-testnet", CHAIN_ID);
-      this.provider = new ethers.JsonRpcProvider(RPC_URL, network, { staticNetwork: network });
-      this.signer = new ethers.Wallet(PRIVATE_KEY, this.provider);
-      this.oracleContract = new ethers.Contract(AI_ORACLE_ADDRESS, AIOracleABI, this.signer);
+      const network = new ethers.Network("hedera-testnet", config.hedera.chainId);
+      this.provider = new ethers.JsonRpcProvider(config.hedera.rpcUrl, network, { staticNetwork: network });
+      this.signer = new ethers.Wallet(config.oracle.privateKey, this.provider);
+      this.oracleContract = new ethers.Contract(config.contracts.aiOracle, AIOracleABI, this.signer);
 
       this.lastProcessedBlock = await this.provider.getBlockNumber();
       logger.info(`📍 AI Listening from block: ${this.lastProcessedBlock}`);
       
-      // Poll every 10 seconds
       setInterval(() => this.pollForEvents(), 10000);
 
     } catch (error) {
@@ -55,16 +47,22 @@ export class OracleWorker {
 
     try {
       const currentBlock = await this.provider.getBlockNumber();
-      if (currentBlock <= this.lastProcessedBlock) return;
+      if (currentBlock <= this.lastProcessedBlock) {
+        this.isProcessing = false;
+        return;
+      }
 
       const events = await this.oracleContract.queryFilter('JobRequested', this.lastProcessedBlock + 1, currentBlock);
       
       for (const event of events) {
-         if ('args' in event) {
-             const [jobId, requester, jobType, dataCid] = event.args;
-             logger.info(`🔔 New Job #${jobId} Type: ${jobType} from ${requester}`);
-             // Add your handling logic here (handleSkillGrading / handleDisputeResolution)
-         }
+        if ('args' in event) {
+          const [jobId, jobType, referenceId] = event.args;
+          logger.info(`🔔 New Job #${jobId} Type: ${jobType}`);
+          
+          if (Number(jobType) === JobType.SKILL_GRADING) {
+            await this.handleSkillGrading(Number(jobId), Number(referenceId));
+          }
+        }
       }
       this.lastProcessedBlock = currentBlock;
     } catch (error) {
@@ -73,7 +71,32 @@ export class OracleWorker {
       this.isProcessing = false;
     }
   }
+
+  private async handleSkillGrading(jobId: number, submissionId: number) {
+    try {
+      logger.info(`📝 Grading submission #${submissionId}...`);
+      
+      const result = await aiService.gradeSubmission({
+        question: 'Skill test submission',
+        answer: 'Submission content from IPFS',
+        expectedCriteria: 'Standard criteria'
+      });
+
+      if (this.oracleContract && this.signer) {
+        const tx = await this.oracleContract.fulfillSkillGrade(
+          jobId,
+          submissionId,
+          await this.signer.getAddress(),
+          result.score,
+          result.report
+        );
+        await tx.wait();
+        logger.info(`✅ Grading fulfilled for job #${jobId}`);
+      }
+    } catch (error) {
+      logger.error(`Failed to grade submission #${submissionId}:`, error);
+    }
+  }
 }
 
-// THIS EXPORT IS CRITICAL
 export const oracleWorker = new OracleWorker();

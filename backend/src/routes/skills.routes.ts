@@ -5,13 +5,8 @@ import { logger } from '../utils/logger.js';
 
 const router = Router();
 
-/**
- * GET /api/skills/tests
- * List all available skill tests
- */
-router.get('/tests', async (req: Request, res: Response) => {
+router.get('/tests', async (_req: Request, res: Response) => {
   try {
-    // In production, we'd paginate through contract
     const tests = [];
     
     for (let i = 0; i < 10; i++) {
@@ -21,7 +16,7 @@ router.get('/tests', async (req: Request, res: Response) => {
           tests.push({ id: i, ...test });
         }
       } catch {
-        break; // No more tests
+        break;
       }
     }
 
@@ -32,10 +27,6 @@ router.get('/tests', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/skills/tests/:id
- * Get specific skill test details
- */
 router.get('/tests/:id', async (req: Request, res: Response) => {
   try {
     const testId = parseInt(req.params.id);
@@ -48,19 +39,15 @@ router.get('/tests/:id', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * POST /api/skills/submit
- * Upload submission to IPFS (client handles on-chain submission)
- */
 router.post('/submit', async (req: Request, res: Response) => {
   try {
     const { testId, content, metadata } = req.body;
 
     if (!testId || !content) {
-      return res.status(400).json({ success: false, error: 'Missing required fields' });
+      res.status(400).json({ success: false, error: 'Missing required fields' });
+      return;
     }
 
-    // Upload submission to IPFS
     const submission = {
       testId,
       content,
@@ -81,16 +68,11 @@ router.post('/submit', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/skills/badges/:address
- * Get user's skill badges
- */
 router.get('/badges/:address', async (req: Request, res: Response) => {
   try {
     const { address } = req.params;
     const profile = await blockchainService.getUserProfile(address);
     
-    // Filter for SKILL attestations
     const skillBadges = profile.attestations.filter((a: any) => a.type === 0);
 
     res.json({ 

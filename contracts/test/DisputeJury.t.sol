@@ -111,7 +111,6 @@ contract DisputeJuryTest is Test {
         vm.prank(jurors[0]);
         jury.castVote(disputeId, DisputeJury.VoteChoice.AcceptAI);
         
-        // FIXED: Removed unused 'outcome' variable to fix linter warning
         (,,,, , uint256 votesAcceptAI,,,) = jury.getDispute(disputeId);
         assertEq(votesAcceptAI, 1);
     }

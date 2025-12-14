@@ -1,11 +1,10 @@
 import CryptoJS from 'crypto-js';
-import config from '../config';
-import { logger } from './logger';
+import { config } from '../config/index.js';
+import { logger } from './logger.js';
 
 // ============ Configuration ============
 
 const ENCRYPTION_KEY = config.encryption.key;
-const ALGORITHM = config.encryption.algorithm; // 'aes-256-cbc'
 
 // Validate key length (32 bytes for AES-256)
 if (ENCRYPTION_KEY.length !== 32) {
@@ -136,15 +135,6 @@ export function verifyHash(value: string, hash: string): boolean {
 
 // ============ Mongoose Plugin ============
 
-/**
- * Mongoose plugin to automatically encrypt/decrypt specified fields
- * 
- * Usage:
- * schema.plugin(encryptionPlugin, { 
- *   fields: ['ssn', 'taxId', 'bankAccount'],
- *   exclude: ['_id', 'createdAt', 'updatedAt']
- * });
- */
 export interface EncryptionPluginOptions {
   fields: string[];
   exclude?: string[];
@@ -186,7 +176,7 @@ export function encryptionPlugin(schema: any, options: EncryptionPluginOptions) 
           } catch {
             doc[field] = decrypted;
           }
-        } catch (e) {
+        } catch {
           // Keep original if decryption fails
         }
       }
@@ -202,28 +192,10 @@ export function encryptionPlugin(schema: any, options: EncryptionPluginOptions) 
   
   schema.post('findOne', decryptDoc);
   schema.post('findById', decryptDoc);
-  
-  // Add method to get encrypted value for searching
-  schema.methods.getEncryptedField = function(field: string): string | null {
-    if (this[field] && typeof this[field] === 'string') {
-      return encrypt(this[field]);
-    }
-    return null;
-  };
-  
-  // Add static method to search encrypted fields
-  schema.statics.findByEncryptedField = async function(
-    field: string, 
-    value: string
-  ): Promise<any[]> {
-    const encryptedValue = encrypt(value);
-    return this.find({ [field]: encryptedValue });
-  };
 }
 
 // ============ Sensitive Field Detection ============
 
-// Common PII field patterns
 const SENSITIVE_PATTERNS = [
   /ssn/i,
   /social.?security/i,
@@ -244,16 +216,10 @@ const SENSITIVE_PATTERNS = [
   /prescription/i,
 ];
 
-/**
- * Check if a field name is likely sensitive PII
- */
 export function isSensitiveField(fieldName: string): boolean {
   return SENSITIVE_PATTERNS.some(pattern => pattern.test(fieldName));
 }
 
-/**
- * Auto-detect sensitive fields in a schema
- */
 export function detectSensitiveFields(schema: Record<string, any>): string[] {
   const sensitiveFields: string[] = [];
   
@@ -262,7 +228,6 @@ export function detectSensitiveFields(schema: Record<string, any>): string[] {
       sensitiveFields.push(key);
     }
     
-    // Check nested objects
     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
       const nested = detectSensitiveFields(value);
       sensitiveFields.push(...nested.map(n => `${key}.${n}`));
@@ -271,8 +236,6 @@ export function detectSensitiveFields(schema: Record<string, any>): string[] {
   
   return sensitiveFields;
 }
-
-// ============ Export ============
 
 export default {
   encrypt,

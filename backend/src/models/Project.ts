@@ -20,25 +20,23 @@ export enum ProjectStatus {
 export interface IMilestone {
   index: number;
   description: string;
-  amount: string; // BigInt as string for MongoDB
+  amount: string;
   status: MilestoneStatus;
   completionTime?: Date;
   deliverableIpfsHash?: string;
 }
 
 export interface IProject extends Document {
-  // On-chain data
   projectId: number;
-  client: string; // Ethereum address
-  freelancer: string; // Ethereum address
+  client: string;
+  freelancer: string;
   agencyId: number;
-  totalAmount: string; // BigInt as string
+  totalAmount: string;
   amountPaid: string;
   status: ProjectStatus;
   milestones: IMilestone[];
   isEnterpriseProject: boolean;
 
-  // Off-chain metadata (stored here, not on-chain)
   title: string;
   briefDescription: string;
   fullDescriptionIpfsHash?: string;
@@ -46,13 +44,11 @@ export interface IProject extends Document {
   skills?: string[];
   deadline?: Date;
 
-  // Indexing metadata
   transactionHash: string;
   blockNumber: number;
   createdAt: Date;
   updatedAt: Date;
 
-  // Search/filter helpers
   clientLower: string;
   freelancerLower: string;
 }
@@ -77,7 +73,6 @@ const MilestoneSchema = new Schema<IMilestone>(
 
 const ProjectSchema = new Schema<IProject>(
   {
-    // On-chain data
     projectId: { type: Number, required: true, unique: true, index: true },
     client: { type: String, required: true, index: true },
     freelancer: { type: String, required: true, index: true },
@@ -93,7 +88,6 @@ const ProjectSchema = new Schema<IProject>(
     milestones: [MilestoneSchema],
     isEnterpriseProject: { type: Boolean, default: false },
 
-    // Off-chain metadata
     title: { type: String, required: true, index: 'text' },
     briefDescription: { type: String, required: true },
     fullDescriptionIpfsHash: { type: String },
@@ -101,11 +95,9 @@ const ProjectSchema = new Schema<IProject>(
     skills: [{ type: String }],
     deadline: { type: Date },
 
-    // Indexing metadata
     transactionHash: { type: String, required: true, index: true },
     blockNumber: { type: Number, required: true, index: true },
 
-    // Search helpers (lowercase for case-insensitive queries)
     clientLower: { type: String, index: true },
     freelancerLower: { type: String, index: true },
   },
@@ -114,7 +106,6 @@ const ProjectSchema = new Schema<IProject>(
   }
 );
 
-// Pre-save middleware to set lowercase addresses
 ProjectSchema.pre('save', function (next) {
   if (this.client) {
     this.clientLower = this.client.toLowerCase();
@@ -125,7 +116,6 @@ ProjectSchema.pre('save', function (next) {
   next();
 });
 
-// Compound indexes for common queries
 ProjectSchema.index({ clientLower: 1, status: 1 });
 ProjectSchema.index({ freelancerLower: 1, status: 1 });
 ProjectSchema.index({ createdAt: -1 });

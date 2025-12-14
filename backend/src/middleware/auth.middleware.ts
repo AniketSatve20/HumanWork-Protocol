@@ -1,63 +1,58 @@
 import { Request, Response, NextFunction } from 'express';
-import * as jwt from 'jsonwebtoken'; // Fixes "jwt.verify is not a function"
-import { logger } from '../utils/logger';
+import jwt from 'jsonwebtoken';
+import { config } from '../config/index.js';
+import { logger } from '../utils/logger.js';
 
-// 1. Define what the User object looks like inside the token
-export interface UserPayload extends jwt.JwtPayload {
+// User payload interface
+export interface UserPayload {
   walletAddress: string;
+  iat?: number;
+  exp?: number;
 }
 
-// 2. Extend Express Request to include 'user'
+// Extended Request with user
 export interface AuthenticatedRequest extends Request {
   user?: UserPayload;
 }
 
-// 3. Secure Secret Handling
-const SECRET_KEY = process.env.JWT_SECRET || 'UNSAFE_DEFAULT_SECRET';
+const SECRET_KEY = config.jwt.secret;
 
-if (!process.env.JWT_SECRET) {
-  logger.warn('⚠️ JWT_SECRET missing in .env. Using unsafe default.');
+if (SECRET_KEY === 'unsafe-default-secret-change-in-production') {
+  logger.warn('⚠️ JWT_SECRET using default value. Set JWT_SECRET in .env for production.');
 }
 
 export const authenticateToken = (
   req: AuthenticatedRequest, 
   res: Response, 
   next: NextFunction
-) => {
+): void => {
   const authHeader = req.headers['authorization'];
   
-  // Handle "Bearer <token>" or just "<token>"
   const token = authHeader && authHeader.startsWith('Bearer ') 
     ? authHeader.split(' ')[1] 
     : authHeader;
 
   if (!token) {
-    return res.status(401).json({ 
+    res.status(401).json({ 
       success: false, 
       message: 'Access denied. Token required.' 
     });
+    return;
   }
 
-  // 4. Verify with explicit types
-  jwt.verify(token, SECRET_KEY, (err: jwt.VerifyErrors | null, decoded: string | jwt.JwtPayload | undefined) => {
-    if (err) {
-      const message = err.name === 'TokenExpiredError' 
-        ? 'Session expired. Please login again.' 
-        : 'Invalid token.';
-      
-      return res.status(403).json({ success: false, message });
-    }
-
-    if (!decoded) {
-      return res.status(403).json({ success: false, message: 'Token payload empty.' });
-    }
-
-    // Success! Attach user to request
-    req.user = decoded as UserPayload;
+  try {
+    const decoded = jwt.verify(token, SECRET_KEY) as UserPayload;
+    req.user = decoded;
     next();
-  });
+  } catch (err: any) {
+    const message = err.name === 'TokenExpiredError' 
+      ? 'Session expired. Please login again.' 
+      : 'Invalid token.';
+    
+    res.status(403).json({ success: false, message });
+  }
 };
 
 export function generateToken(walletAddress: string): string {
-  return jwt.sign({ walletAddress }, SECRET_KEY, { expiresIn: '7d' });
+  return jwt.sign({ walletAddress }, SECRET_KEY, { expiresIn: config.jwt.expiresIn });
 }

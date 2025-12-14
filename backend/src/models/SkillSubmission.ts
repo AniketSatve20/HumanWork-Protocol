@@ -12,7 +12,6 @@ export enum SubmissionStatus {
 // ============ Interfaces ============
 
 export interface ISkillSubmission extends Document {
-  // On-chain data
   submissionId: number;
   testId: number;
   applicant: string;
@@ -21,12 +20,10 @@ export interface ISkillSubmission extends Document {
   score?: number;
   aiReport?: string;
 
-  // Test metadata (cached from contract)
   testTitle?: string;
   testDescription?: string;
   testFee?: string;
 
-  // AI Grading details
   gradingStartedAt?: Date;
   gradingCompletedAt?: Date;
   aiModelUsed?: string;
@@ -38,17 +35,14 @@ export interface ISkillSubmission extends Document {
     feedback: string;
   };
 
-  // Badge info (if passed)
   badgeTokenId?: number;
   badgeMintedAt?: Date;
 
-  // Indexing
   transactionHash: string;
   blockNumber: number;
   createdAt: Date;
   updatedAt: Date;
 
-  // Search helpers
   applicantLower: string;
 }
 
@@ -102,7 +96,6 @@ const SkillSubmissionSchema = new Schema<ISkillSubmission>(
   }
 );
 
-// Pre-save middleware
 SkillSubmissionSchema.pre('save', function (next) {
   if (this.applicant) {
     this.applicantLower = this.applicant.toLowerCase();
@@ -110,7 +103,6 @@ SkillSubmissionSchema.pre('save', function (next) {
   next();
 });
 
-// Indexes
 SkillSubmissionSchema.index({ applicantLower: 1, status: 1 });
 SkillSubmissionSchema.index({ testId: 1, status: 1 });
 

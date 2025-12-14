@@ -1,21 +1,17 @@
 import { Request, Response } from 'express';
-import { ipfsService } from '../services/ipfs.service'; // ✅ Correct Import
-import { logger } from '../utils/logger';
+import { ipfsService } from '../services/ipfs.service.js';
+import { logger } from '../utils/logger.js';
 
-/**
- * Handles the IPFS upload for the project brief.
- * POST /api/projects/upload
- */
-export const uploadProjectBrief = async (req: Request, res: Response) => {
+export const uploadProjectBrief = async (req: Request, res: Response): Promise<void> => {
   if (!req.file) {
-    return res.status(400).json({ success: false, message: 'No file uploaded.' });
+    res.status(400).json({ success: false, message: 'No file uploaded.' });
+    return;
   }
 
   try {
     const fileBuffer = req.file.buffer;
     const filename = req.file.originalname;
 
-    // ✅ Use the class instance method
     const ipfsHash = await ipfsService.uploadFile(fileBuffer, filename);
     const gatewayUrl = ipfsService.getGatewayUrl(ipfsHash);
 

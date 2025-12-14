@@ -1,14 +1,9 @@
 import { HfInference } from '@huggingface/inference';
-import { logger } from '../../utils/logger';
+import { config } from '../../config/index.js';
+import { logger } from '../../utils/logger.js';
 
-// Initialize HF Client
-// Ensure HUGGINGFACE_API_KEY is in your .env
-const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
-
-// Use a model with strong reasoning capabilities
+const hf = config.huggingface.apiKey ? new HfInference(config.huggingface.apiKey) : null;
 const MODEL_ID = 'meta-llama/Meta-Llama-3-70B-Instruct'; 
-
-// --- Interfaces ---
 
 export interface DisputeEvidence {
   projectTitle: string;
@@ -35,17 +30,15 @@ export interface AIAnalysisResult {
 
 export interface SkillSubmission {
   question: string;
-  answer: string; // The user's code or text answer
+  answer: string;
   expectedCriteria?: string;
 }
 
 export interface GradingResult {
-  score: number; // 0-100
+  score: number;
   feedback: string;
   passed: boolean;
 }
-
-// --- Helper: System Prompts ---
 
 function buildDisputeSystemPrompt(): string {
   return `
@@ -86,13 +79,20 @@ Respond ONLY with valid JSON (no markdown):
 `;
 }
 
-// --- Main AI Service ---
-
-export const aiService = {
-  /**
-   * Analyzes a dispute and recommends a payout split.
-   */
+export const aiModuleService = {
   analyzeDispute: async (evidence: DisputeEvidence): Promise<AIAnalysisResult> => {
+    if (!hf) {
+      return {
+        summary: "AI Unavailable (Mock)",
+        codeQualityScore: 75,
+        scopeAdherenceScore: 75,
+        communicationScore: 75,
+        recommendedSplit: { freelancer: 50, client: 50 },
+        reasoning: "AI service not configured",
+        confidence: 0
+      };
+    }
+
     try {
       const userPrompt = `
       **DISPUTE CONTEXT**
@@ -116,7 +116,7 @@ export const aiService = {
           { role: 'user', content: userPrompt }
         ],
         max_tokens: 1000,
-        temperature: 0.1, // Low temp for factual consistency
+        temperature: 0.1,
       });
 
       const content = response.choices[0].message.content || "{}";
@@ -129,10 +129,11 @@ export const aiService = {
     }
   },
 
-  /**
-   * Grades a skill submission (Code or Theory).
-   */
   gradeSubmission: async (submission: SkillSubmission): Promise<GradingResult> => {
+    if (!hf) {
+      return { score: 85, feedback: "AI not configured. Mock passing grade.", passed: true };
+    }
+
     try {
       const userPrompt = `
       **QUESTION:** ${submission.question}
@@ -160,13 +161,10 @@ export const aiService = {
 
     } catch (error) {
       logger.error('AI Grading Failed:', error);
-      // Fallback for safety
       return { score: 0, feedback: "AI Service Unavailable", passed: false };
     }
   }
 };
 
-// Export individual functions for backward compatibility if needed, 
-// but referencing aiService.method is preferred.
-export const analyzeDispute = aiService.analyzeDispute;
-export const gradeSubmission = aiService.gradeSubmission;
+export const analyzeDispute = aiModuleService.analyzeDispute;
+export const gradeSubmission = aiModuleService.gradeSubmission;

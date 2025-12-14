@@ -11,7 +11,7 @@ export enum LegitimacyLevel {
 // ============ Interfaces ============
 
 export interface IAttestation {
-  attestationType: number; // 0=SKILL, 1=PROJECT, 2=NEGATIVE
+  attestationType: number;
   referenceId: number;
   timestamp: Date;
   issuer: string;
@@ -20,14 +20,12 @@ export interface IAttestation {
 }
 
 export interface IUser extends Document {
-  // On-chain data
   walletAddress: string;
   level: LegitimacyLevel;
   hasDeposited: boolean;
   registrationTime: Date;
   ensName?: string;
 
-  // Off-chain profile metadata
   displayName?: string;
   bio?: string;
   avatarIpfsHash?: string;
@@ -41,21 +39,17 @@ export interface IUser extends Document {
     website?: string;
   };
 
-  // Cached attestations (synced from chain)
   attestations: IAttestation[];
 
-  // Stats (cached for performance)
   totalProjects: number;
   completedProjects: number;
   totalEarned: string;
   averageRating?: number;
 
-  // Timestamps
   createdAt: Date;
   updatedAt: Date;
   lastSyncedBlock: number;
 
-  // Search helpers
   walletAddressLower: string;
 }
 
@@ -114,7 +108,6 @@ const UserSchema = new Schema<IUser>(
   }
 );
 
-// Pre-save middleware
 UserSchema.pre('save', function (next) {
   if (this.walletAddress) {
     this.walletAddressLower = this.walletAddress.toLowerCase();
@@ -122,7 +115,6 @@ UserSchema.pre('save', function (next) {
   next();
 });
 
-// Compound indexes
 UserSchema.index({ skills: 1, level: 1 });
 UserSchema.index({ walletAddressLower: 1 });
 

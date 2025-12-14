@@ -1,20 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
-import { encryptionPlugin } from '../utils/encryption';
-
-/**
- * SecureUser Model
- * 
- * This model demonstrates Application-Level Encryption (ALE) for GDPR compliance.
- * Sensitive PII fields are automatically encrypted before storage and decrypted on retrieval.
- * 
- * Encrypted Fields:
- * - legalName: Full legal name
- * - taxId: GST number, PAN, SSN, etc.
- * - nationalId: Aadhaar, Passport, etc.
- * - bankDetails: Full bank account information
- * - kycDocuments: KYC verification documents
- * - chatLogs: Private conversation logs
- */
+import { encryptionPlugin, hashForSearch } from '../utils/encryption.js';
 
 // ============ Interfaces ============
 
@@ -26,7 +11,7 @@ export interface IBankDetails {
 }
 
 export interface IKYCDocument {
-  type: string; // 'passport', 'aadhaar', 'pan', 'driverLicense'
+  type: string;
   documentNumber: string;
   expiryDate?: Date;
   verificationStatus: 'pending' | 'verified' | 'rejected';
@@ -42,37 +27,36 @@ export interface IChatLog {
 }
 
 export interface ISecureUser extends Document {
-  // Public fields (not encrypted)
   walletAddress: string;
   publicAlias: string;
   isKycVerified: boolean;
   registrationDate: Date;
   
-  // Encrypted PII fields
   legalName: string;
   email: string;
   phone: string;
-  taxId: string; // GST, PAN, SSN
-  nationalId: string; // Aadhaar, Passport
+  taxId: string;
+  nationalId: string;
   bankDetails: IBankDetails;
   kycDocuments: IKYCDocument[];
   chatLogs: IChatLog[];
   
-  // Hashed for searching (one-way)
   emailHash: string;
   phoneHash: string;
   
-  // Timestamps
   createdAt: Date;
   updatedAt: Date;
   lastAccessedAt: Date;
   
-  // GDPR
   consentGiven: boolean;
   consentDate?: Date;
   dataRetentionExpiry?: Date;
   deletionRequested: boolean;
   deletionRequestDate?: Date;
+
+  erasePersonalData(): Promise<void>;
+  exportPersonalData(): object;
+  trackAccess(): Promise<void>;
 }
 
 // ============ Schema ============
@@ -115,13 +99,11 @@ const ChatLogSchema = new Schema<IChatLog>(
 
 const SecureUserSchema = new Schema<ISecureUser>(
   {
-    // Public fields
     walletAddress: { type: String, required: true, unique: true, index: true },
     publicAlias: { type: String, index: true },
     isKycVerified: { type: Boolean, default: false },
     registrationDate: { type: Date, default: Date.now },
     
-    // Encrypted PII fields (stored as encrypted strings)
     legalName: { type: String },
     email: { type: String },
     phone: { type: String },
@@ -131,11 +113,9 @@ const SecureUserSchema = new Schema<ISecureUser>(
     kycDocuments: [KYCDocumentSchema],
     chatLogs: [ChatLogSchema],
     
-    // Hashed fields for searching
     emailHash: { type: String, index: true },
     phoneHash: { type: String, index: true },
     
-    // GDPR compliance fields
     consentGiven: { type: Boolean, default: false },
     consentDate: { type: Date },
     dataRetentionExpiry: { type: Date },
@@ -149,14 +129,7 @@ const SecureUserSchema = new Schema<ISecureUser>(
   }
 );
 
-// ============ Apply Encryption Plugin ============
-
-/**
- * The encryption plugin automatically:
- * 1. Encrypts specified fields before save
- * 2. Decrypts fields after retrieval
- * 3. Uses AES-256-CBC with random IV per field
- */
+// Apply Encryption Plugin
 SecureUserSchema.plugin(encryptionPlugin, {
   fields: [
     'legalName',
@@ -164,19 +137,11 @@ SecureUserSchema.plugin(encryptionPlugin, {
     'phone',
     'taxId',
     'nationalId',
-    // Note: Nested objects are stringified and encrypted
-    // 'bankDetails', // Complex objects handled separately
-    // 'kycDocuments',
-    // 'chatLogs',
   ],
   exclude: ['_id', 'walletAddress', 'createdAt', 'updatedAt'],
 });
 
-// ============ Instance Methods ============
-
-/**
- * Safely delete all PII data (GDPR right to erasure)
- */
+// Instance Methods
 SecureUserSchema.methods.erasePersonalData = async function(): Promise<void> {
   this.legalName = '[DELETED]';
   this.email = '[DELETED]';
@@ -198,9 +163,6 @@ SecureUserSchema.methods.erasePersonalData = async function(): Promise<void> {
   await this.save();
 };
 
-/**
- * Export all personal data (GDPR right to data portability)
- */
 SecureUserSchema.methods.exportPersonalData = function(): object {
   return {
     walletAddress: this.walletAddress,
@@ -218,41 +180,13 @@ SecureUserSchema.methods.exportPersonalData = function(): object {
   };
 };
 
-/**
- * Update last accessed time (for data retention tracking)
- */
 SecureUserSchema.methods.trackAccess = async function(): Promise<void> {
   this.lastAccessedAt = new Date();
   await this.save();
 };
 
-// ============ Static Methods ============
-
-/**
- * Find users with expired data retention
- */
-SecureUserSchema.statics.findExpiredRetention = function() {
-  return this.find({
-    dataRetentionExpiry: { $lt: new Date() },
-    deletionRequested: { $ne: true },
-  });
-};
-
-/**
- * Find users who requested deletion
- */
-SecureUserSchema.statics.findDeletionRequests = function() {
-  return this.find({
-    deletionRequested: true,
-  });
-};
-
-// ============ Pre-save Hooks ============
-
-import { hashForSearch } from '../utils/encryption';
-
+// Pre-save Hooks
 SecureUserSchema.pre('save', function(next) {
-  // Generate search hashes for email and phone
   if (this.isModified('email') && this.email && !this.email.includes(':')) {
     this.emailHash = hashForSearch(this.email.toLowerCase());
   }
@@ -260,7 +194,6 @@ SecureUserSchema.pre('save', function(next) {
     this.phoneHash = hashForSearch(this.phone);
   }
   
-  // Set default data retention (2 years from now)
   if (!this.dataRetentionExpiry) {
     const twoYearsFromNow = new Date();
     twoYearsFromNow.setFullYear(twoYearsFromNow.getFullYear() + 2);
@@ -269,8 +202,6 @@ SecureUserSchema.pre('save', function(next) {
   
   next();
 });
-
-// ============ Export ============
 
 export const SecureUser = mongoose.model<ISecureUser>('SecureUser', SecureUserSchema);
 

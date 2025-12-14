@@ -1,0 +1,28 @@
+# Compiler files
+cache/
+out/
+
+# Ignores development broadcast logs
+broadcast/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Docs
+docs/
+
+# Dotenv file
+.env
+
+# Coverage
+lcov.info
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db

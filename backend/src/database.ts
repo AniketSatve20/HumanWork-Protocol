@@ -1,12 +1,10 @@
 import mongoose from 'mongoose';
-import { logger } from './utils/logger';
-
-// Use the URI from .env or fallback to localhost
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://Ani:Ani@cluster0.muctbha.mongodb.net/?appName=Cluster0';
+import { config } from './config/index.js';
+import { logger } from './utils/logger.js';
 
 export async function connectDatabase(): Promise<typeof mongoose> {
   try {
-    const connection = await mongoose.connect(MONGODB_URI, {
+    const connection = await mongoose.connect(config.mongodb.uri, {
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
     });
@@ -24,7 +22,11 @@ export async function connectDatabase(): Promise<typeof mongoose> {
     return connection;
   } catch (error) {
     logger.error('Failed to connect to MongoDB:', error);
-    process.exit(1);
+    // Don't exit in development if MongoDB is optional
+    if (config.nodeEnv === 'production') {
+      process.exit(1);
+    }
+    throw error;
   }
 }
 

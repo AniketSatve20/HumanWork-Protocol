@@ -97,7 +97,6 @@ contract IntegrationTest is Test {
         usdc.approve(address(enterpriseAccess), 5000 * 10**6);
         
         vm.prank(client);
-        // FIXED: Removed unused 'subId' variable to fix linter warning
         enterpriseAccess.subscribe(EnterpriseAccess.Tier.ClientAnnual, "ClientCo");
         
         assertTrue(enterpriseAccess.isEnterpriseUser(client));

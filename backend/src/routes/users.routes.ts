@@ -5,22 +5,18 @@ import crypto from 'crypto';
 
 const router = Router();
 
-// Store nonces for wallet signature verification
 const nonces = new Map<string, { nonce: string; expires: number }>();
 
-/**
- * POST /api/users/nonce
- * Generate nonce for wallet signature
- */
 router.post('/nonce', (req: Request, res: Response) => {
   const { address } = req.body;
 
   if (!address) {
-    return res.status(400).json({ success: false, error: 'Address required' });
+    res.status(400).json({ success: false, error: 'Address required' });
+    return;
   }
 
   const nonce = crypto.randomBytes(32).toString('hex');
-  const expires = Date.now() + 5 * 60 * 1000; // 5 minutes
+  const expires = Date.now() + 5 * 60 * 1000;
 
   nonces.set(address.toLowerCase(), { nonce, expires });
 
@@ -31,28 +27,23 @@ router.post('/nonce', (req: Request, res: Response) => {
   });
 });
 
-/**
- * POST /api/users/verify
- * Verify wallet signature
- */
 router.post('/verify', async (req: Request, res: Response) => {
   const { address, signature } = req.body;
 
   if (!address || !signature) {
-    return res.status(400).json({ success: false, error: 'Address and signature required' });
+    res.status(400).json({ success: false, error: 'Address and signature required' });
+    return;
   }
 
   const stored = nonces.get(address.toLowerCase());
   
   if (!stored || stored.expires < Date.now()) {
-    return res.status(401).json({ success: false, error: 'Nonce expired or not found' });
+    res.status(401).json({ success: false, error: 'Nonce expired or not found' });
+    return;
   }
 
-  // In production, verify the signature matches
-  // For now, accept any signature for demo
   nonces.delete(address.toLowerCase());
 
-  // Fetch user profile from blockchain
   try {
     const profile = await blockchainService.getUserProfile(address);
     
@@ -64,7 +55,6 @@ router.post('/verify', async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    // User not registered yet
     res.json({
       success: true,
       user: {
@@ -77,10 +67,6 @@ router.post('/verify', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/users/:address
- * Get user profile
- */
 router.get('/:address', async (req: Request, res: Response) => {
   try {
     const { address } = req.params;
@@ -99,16 +85,11 @@ router.get('/:address', async (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/users/:address/reputation
- * Get user reputation score
- */
 router.get('/:address/reputation', async (req: Request, res: Response) => {
   try {
     const { address } = req.params;
     const profile = await blockchainService.getUserProfile(address);
     
-    // Calculate reputation from attestations
     const positiveCount = profile.attestations.filter((a: any) => a.isPositive).length;
     const negativeCount = profile.attestations.filter((a: any) => !a.isPositive).length;
     

@@ -122,7 +122,6 @@ contract SkillTrialTest is Test {
         assertEq(sub.score, 95);
     }
     
-    // FIXED: Renamed from 'testFailingGradeDoesNotMintBadge' to avoid 'testFail' prefix error
     function testCannotMintWithFailingGrade() public {
         vm.prank(backendServer);
         skillTrial.createTest("Hard Test", "Test", "ipfs://...", 10 * 10**6);

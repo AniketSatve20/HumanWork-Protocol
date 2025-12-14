@@ -1,24 +1,21 @@
 import { HfInference } from '@huggingface/inference';
-import { config } from '../config'; // ✅ Fixed Import
-import { logger } from '../utils/logger';
+import { config } from '../config/index.js';
+import { logger } from '../utils/logger.js';
 
 // ============ Interfaces ============
 
-// The shape of data coming from the worker for grading
 export interface SkillSubmission {
   question: string;
   answer: string;
   expectedCriteria?: string;
 }
 
-// The shape of the grading output
 export interface GradingResult {
   score: number;
   report: string;
   passed: boolean;
 }
 
-// The shape of data for dispute resolution
 export interface DisputeEvidence {
   projectTitle: string;
   milestoneDescription: string;
@@ -27,7 +24,6 @@ export interface DisputeEvidence {
   freelancerEvidence: string;
 }
 
-// The shape of the dispute verdict
 export interface DisputeResult {
   report: string;
   recommendedSplit: {
@@ -45,19 +41,15 @@ class AIService {
   constructor() {
     if (config.huggingface.apiKey) {
       this.hf = new HfInference(config.huggingface.apiKey);
-      // Use a model capable of instruction following
-      this.model = 'meta-llama/Meta-Llama-3-70B-Instruct'; 
+      this.model = config.huggingface.model;
+      logger.info('✅ Hugging Face AI initialized');
     } else {
       logger.warn('⚠️ Hugging Face API key missing. AI features will use mocks.');
       this.model = 'mock-model';
     }
   }
 
-  /**
-   * Grade a skill test submission using AI
-   */
   async gradeSubmission(submission: SkillSubmission): Promise<GradingResult> {
-    // If AI is not configured, return a mock passing grade
     if (!this.hf) return this.mockGrade();
 
     try {
@@ -82,7 +74,7 @@ class AIService {
         inputs: prompt,
         parameters: { 
           max_new_tokens: 500, 
-          temperature: 0.1, // Low temp for consistency
+          temperature: 0.1,
           return_full_text: false 
         }
       });
@@ -95,12 +87,12 @@ class AIService {
     }
   }
 
-  /**
-   * Analyze a dispute between Client and Freelancer
-   */
   async analyzeDispute(evidence: DisputeEvidence): Promise<DisputeResult> {
     if (!this.hf) {
-      return { report: "AI Unavailable (Mock).", recommendedSplit: { freelancer: 50, client: 50 } };
+      return { 
+        report: "AI Unavailable (Mock).", 
+        recommendedSplit: { freelancer: 50, client: 50 } 
+      };
     }
 
     try {
@@ -136,20 +128,17 @@ class AIService {
 
     } catch (error) {
       logger.error('AI Dispute Analysis failed:', error);
-      return { report: "Analysis Error.", recommendedSplit: { freelancer: 50, client: 50 } };
+      return { 
+        report: "Analysis Error.", 
+        recommendedSplit: { freelancer: 50, client: 50 } 
+      };
     }
   }
 
-  /**
-   * Helper to safely extract JSON from AI responses
-   * (Handles cases where AI adds "Here is the JSON:" text)
-   */
   private parseJSON(text: string): any {
     try {
-      // 1. Remove markdown code blocks
       const cleanText = text.replace(/```json\n?|\n?```/g, '').trim();
       
-      // 2. Find the JSON object bounds
       const firstBrace = cleanText.indexOf('{');
       const lastBrace = cleanText.lastIndexOf('}');
       
@@ -159,9 +148,8 @@ class AIService {
       }
       
       return JSON.parse(cleanText);
-    } catch (e) {
+    } catch {
       logger.warn(`Failed to parse AI JSON response: ${text.substring(0, 50)}...`);
-      // Return a safe failure object so the worker doesn't crash
       return { 
         score: 0, 
         report: "AI Output Parsing Failed", 
