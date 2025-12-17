@@ -266,6 +266,7 @@ export function MessagesPage() {
     fetchConversation,
     fetchMessages,
     sendMessage,
+    startConversation,
     markAsRead,
   } = useMessagesStore();
   const { currentJob, fetchJob } = useJobsStore();
@@ -276,6 +277,19 @@ export function MessagesPage() {
   const [messageInput, setMessageInput] = useState('');
   const [showMilestones, setShowMilestones] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Handle ?job= param - find existing conversation or prompt to start one
+  useEffect(() => {
+    const jobIdParam = searchParams.get('job');
+    if (jobIdParam && conversations.length > 0 && !selectedConversationId) {
+      const jobId = parseInt(jobIdParam);
+      // Find conversation for this job
+      const existingConv = conversations.find(c => c.jobId === jobId);
+      if (existingConv) {
+        setSelectedConversationId(existingConv.id);
+      }
+    }
+  }, [searchParams, conversations, selectedConversationId]);
 
   useEffect(() => {
     fetchConversations();

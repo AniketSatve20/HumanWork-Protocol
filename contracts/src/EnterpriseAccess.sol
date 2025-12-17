@@ -18,10 +18,10 @@ contract EnterpriseAccess is ERC721, Ownable, ReentrancyGuard {
     IERC20 public immutable stablecoin;
     AgencyRegistry public immutable agencyRegistry;
 
-    uint256 public constant CLIENT_MONTHLY_FEE = 500 * 10**6;
-    uint256 public constant CLIENT_ANNUAL_FEE = 5000 * 10**6;
-    uint256 public constant AGENCY_MONTHLY_FEE = 100 * 10**6;
-    uint256 public constant AGENCY_ANNUAL_FEE = 1000 * 10**6;
+    uint256 public constant CLIENT_MONTHLY_FEE = 500 * 10 ** 6;
+    uint256 public constant CLIENT_ANNUAL_FEE = 5000 * 10 ** 6;
+    uint256 public constant AGENCY_MONTHLY_FEE = 100 * 10 ** 6;
+    uint256 public constant AGENCY_ANNUAL_FEE = 1000 * 10 ** 6;
 
     uint256 public subscriptionCounter;
 
@@ -75,30 +75,24 @@ contract EnterpriseAccess is ERC721, Ownable, ReentrancyGuard {
 
     // ============ Constructor ============
 
-    constructor(
-        address _stablecoin,
-        address _agencyRegistry
-    ) ERC721("HumanWork Enterprise", "HWENT") Ownable(msg.sender) {
+    constructor(address _stablecoin, address _agencyRegistry)
+        ERC721("HumanWork Enterprise", "HWENT")
+        Ownable(msg.sender)
+    {
         stablecoin = IERC20(_stablecoin);
         agencyRegistry = AgencyRegistry(_agencyRegistry);
     }
 
     // ============ External Functions ============
 
-    function subscribe(
-        Tier tier,
-        string calldata companyName
-    ) external nonReentrant returns (uint256) {
+    function subscribe(Tier tier, string calldata companyName) external nonReentrant returns (uint256) {
         if (adminToSubscription[msg.sender] != 0) revert AlreadyHasSubscription();
 
         uint256 fee = _getTierFee(tier);
         uint256 duration = _getTierDuration(tier);
         if (fee == 0) revert InvalidTier();
 
-        require(
-            stablecoin.transferFrom(msg.sender, address(this), fee),
-            "Payment failed"
-        );
+        require(stablecoin.transferFrom(msg.sender, address(this), fee), "Payment failed");
 
         uint256 subscriptionId = ++subscriptionCounter;
 
@@ -124,14 +118,11 @@ contract EnterpriseAccess is ERC721, Ownable, ReentrancyGuard {
         if (subscriptionId == 0) revert NotAdmin();
 
         Subscription storage sub = subscriptions[subscriptionId];
-        
+
         uint256 fee = _getTierFee(sub.tier);
         uint256 duration = _getTierDuration(sub.tier);
 
-        require(
-            stablecoin.transferFrom(msg.sender, address(this), fee),
-            "Payment failed"
-        );
+        require(stablecoin.transferFrom(msg.sender, address(this), fee), "Payment failed");
 
         // Extend from current expiry or now, whichever is later
         uint256 startPoint = sub.expiryTime > block.timestamp ? sub.expiryTime : block.timestamp;
@@ -189,7 +180,7 @@ contract EnterpriseAccess is ERC721, Ownable, ReentrancyGuard {
     function isEnterpriseUser(address user) external view returns (bool) {
         return enterpriseUsers[user];
     }
-    
+
     function isAgencySubscriber(address user) external view returns (bool) {
         uint256 subId = adminToSubscription[user];
         if (subId == 0) return false;
@@ -197,25 +188,21 @@ contract EnterpriseAccess is ERC721, Ownable, ReentrancyGuard {
         return (tier == Tier.AgencyMonthly || tier == Tier.AgencyAnnual);
     }
 
-    function getSubscription(uint256 subscriptionId) external view returns (
-        address admin,
-        string memory companyName,
-        Tier tier,
-        SubscriptionStatus status,
-        uint256 startTime,
-        uint256 expiryTime,
-        uint256 managerCount
-    ) {
+    function getSubscription(uint256 subscriptionId)
+        external
+        view
+        returns (
+            address admin,
+            string memory companyName,
+            Tier tier,
+            SubscriptionStatus status,
+            uint256 startTime,
+            uint256 expiryTime,
+            uint256 managerCount
+        )
+    {
         Subscription storage sub = subscriptions[subscriptionId];
-        return (
-            sub.admin,
-            sub.companyName,
-            sub.tier,
-            sub.status,
-            sub.startTime,
-            sub.expiryTime,
-            sub.managers.length
-        );
+        return (sub.admin, sub.companyName, sub.tier, sub.status, sub.startTime, sub.expiryTime, sub.managers.length);
     }
 
     function getManagers(uint256 subscriptionId) external view returns (address[] memory) {
@@ -227,7 +214,7 @@ contract EnterpriseAccess is ERC721, Ownable, ReentrancyGuard {
         if (subId == 0) return false;
         return subscriptions[subId].expiryTime > block.timestamp;
     }
-    
+
     // ============ Internal Functions ============
 
     function _getTierFee(Tier tier) internal pure returns (uint256) {

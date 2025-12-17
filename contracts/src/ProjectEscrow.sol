@@ -14,7 +14,7 @@ import "./EnterpriseAccess.sol";
  */
 contract ProjectEscrow is ReentrancyGuard {
     // ============ State Variables ============
-    
+
     IERC20 public immutable STABLECOIN;
     UserRegistry public immutable userRegistry;
     AgencyRegistry public immutable agencyRegistry;
@@ -61,7 +61,9 @@ contract ProjectEscrow is ReentrancyGuard {
 
     // ============ Events ============
 
-    event ProjectCreated(uint256 indexed projectId, address indexed client, address indexed freelancer, uint256 totalAmount);
+    event ProjectCreated(
+        uint256 indexed projectId, address indexed client, address indexed freelancer, uint256 totalAmount
+    );
     event MilestoneAdded(uint256 indexed projectId, uint256 indexed milestoneId, uint256 amount);
     event MilestoneCompleted(uint256 indexed projectId, uint256 indexed milestoneId);
     event MilestoneApproved(uint256 indexed projectId, uint256 indexed milestoneId, uint256 amount);
@@ -81,12 +83,7 @@ contract ProjectEscrow is ReentrancyGuard {
 
     // ============ Constructor ============
 
-    constructor(
-        address _stablecoin,
-        address _userRegistry,
-        address _agencyRegistry,
-        address _enterpriseAccess
-    ) {
+    constructor(address _stablecoin, address _userRegistry, address _agencyRegistry, address _enterpriseAccess) {
         STABLECOIN = IERC20(_stablecoin);
         userRegistry = UserRegistry(_userRegistry);
         agencyRegistry = AgencyRegistry(_agencyRegistry);
@@ -110,26 +107,26 @@ contract ProjectEscrow is ReentrancyGuard {
         for (uint256 i = 0; i < milestoneAmounts.length; i++) {
             uint256 amount = milestoneAmounts[i];
             require(amount > 0, "Milestone amount must be > 0");
-            proj.milestones.push(Milestone({
-                description: milestoneDescriptions[i],
-                amount: amount,
-                status: MilestoneStatus.Pending,
-                completionTime: 0
-            }));
+            proj.milestones
+                .push(
+                    Milestone({
+                        description: milestoneDescriptions[i],
+                        amount: amount,
+                        status: MilestoneStatus.Pending,
+                        completionTime: 0
+                    })
+                );
             totalAmount += amount;
         }
 
-        require(
-            STABLECOIN.transferFrom(msg.sender, address(this), totalAmount),
-            "Token transfer failed"
-        );
+        require(STABLECOIN.transferFrom(msg.sender, address(this), totalAmount), "Token transfer failed");
 
         proj.projectId = projectId;
         proj.client = msg.sender;
         proj.freelancer = freelancer;
         proj.totalAmount = totalAmount;
         proj.status = ProjectStatus.Active;
-        
+
         // V5 Integration
         bool isEnterprise = enterpriseAccess.isEnterpriseUser(msg.sender);
         proj.isEnterpriseProject = isEnterprise;
@@ -141,27 +138,20 @@ contract ProjectEscrow is ReentrancyGuard {
         return projectId;
     }
 
-    function addMilestone(
-        uint256 projectId,
-        uint256 amount,
-        string memory description
-    ) external nonReentrant {
+    function addMilestone(uint256 projectId, uint256 amount, string memory description) external nonReentrant {
         Project storage proj = projects[projectId];
         if (msg.sender != proj.client) revert NotClient();
         if (proj.status != ProjectStatus.Active) revert ProjectNotActive();
         if (amount == 0) revert InvalidAmount();
 
-        require(
-            STABLECOIN.transferFrom(msg.sender, address(this), amount),
-            "Token transfer failed"
-        );
+        require(STABLECOIN.transferFrom(msg.sender, address(this), amount), "Token transfer failed");
 
-        proj.milestones.push(Milestone({
-            description: description,
-            amount: amount,
-            status: MilestoneStatus.Pending,
-            completionTime: 0
-        }));
+        proj.milestones
+            .push(
+                Milestone({
+                    description: description, amount: amount, status: MilestoneStatus.Pending, completionTime: 0
+                })
+            );
         proj.totalAmount += amount;
 
         emit MilestoneAdded(projectId, proj.milestones.length - 1, amount);
@@ -192,10 +182,7 @@ contract ProjectEscrow is ReentrancyGuard {
         milestone.status = MilestoneStatus.Approved;
         proj.amountPaid += milestone.amount;
 
-        require(
-            STABLECOIN.transfer(proj.freelancer, milestone.amount),
-            "Payment failed"
-        );
+        require(STABLECOIN.transfer(proj.freelancer, milestone.amount), "Payment failed");
 
         // V5 Integration: Add attestation on final milestone approval
         if (proj.amountPaid == proj.totalAmount) {
@@ -221,11 +208,11 @@ contract ProjectEscrow is ReentrancyGuard {
         }
 
         proj.status = ProjectStatus.Cancelled;
-        
+
         if (refundAmount > 0) {
             require(STABLECOIN.transfer(proj.client, refundAmount), "Refund failed");
         }
-        
+
         emit ProjectCancelled(projectId, msg.sender, "Client cancelled");
     }
 
@@ -242,23 +229,19 @@ contract ProjectEscrow is ReentrancyGuard {
         }
 
         proj.status = ProjectStatus.Cancelled;
-        
+
         if (refundAmount > 0) {
             require(STABLECOIN.transfer(proj.client, refundAmount), "Refund failed");
         }
 
         // V5 Integration: Add NEGATIVE attestation
         userRegistry.addAttestationWithMetadata(
-            proj.freelancer,
-            UserRegistry.AttestationType.NEGATIVE,
-            projectId,
-            "Freelancer cancelled project",
-            false
+            proj.freelancer, UserRegistry.AttestationType.NEGATIVE, projectId, "Freelancer cancelled project", false
         );
 
         emit ProjectCancelled(projectId, msg.sender, "Freelancer cancelled");
     }
-    
+
     function createDispute(uint256 projectId, uint256 milestoneId) external nonReentrant {
         Project storage proj = projects[projectId];
         if (msg.sender != proj.client && msg.sender != proj.freelancer) revert NotClientOrFreelancer();
@@ -269,17 +252,12 @@ contract ProjectEscrow is ReentrancyGuard {
         milestone.status = MilestoneStatus.Disputed;
 
         // V5 Integration: Call DisputeJury
-        IDisputeJury(disputeJuryAddress).createDispute(
-            projectId,
-            milestoneId,
-            proj.client,
-            proj.freelancer,
-            milestone.amount
-        );
+        IDisputeJury(disputeJuryAddress)
+            .createDispute(projectId, milestoneId, proj.client, proj.freelancer, milestone.amount);
 
         emit DisputeCreated(projectId, milestoneId);
     }
-    
+
     // ============ View Functions ============
 
     function getProject(uint256 projectId) external view returns (Project memory) {
@@ -304,11 +282,7 @@ contract ProjectEscrow is ReentrancyGuard {
 
 // Interface needed for DisputeJury
 interface IDisputeJury {
-    function createDispute(
-        uint256 projectId,
-        uint256 milestoneId,
-        address client,
-        address freelancer,
-        uint256 amount
-    ) external returns (uint256);
+    function createDispute(uint256 projectId, uint256 milestoneId, address client, address freelancer, uint256 amount)
+        external
+        returns (uint256);
 }

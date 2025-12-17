@@ -23,13 +23,7 @@ export interface AuthState {
 }
 
 // Job Types
-export enum JobStatus {
-  OPEN = 'open',
-  IN_PROGRESS = 'in_progress',
-  COMPLETED = 'completed',
-  CANCELLED = 'cancelled',
-  DISPUTED = 'disputed',
-}
+export type JobStatus = 'open' | 'in_progress' | 'completed' | 'cancelled' | 'disputed';
 
 export enum MilestoneStatus {
   PENDING = 0,

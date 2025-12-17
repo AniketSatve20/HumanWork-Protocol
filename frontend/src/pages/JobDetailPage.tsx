@@ -55,8 +55,8 @@ export function JobDetailPage() {
       });
       setShowApplyModal(false);
       // Start conversation with client
-      await startConversation(parseInt(id), currentJob.client);
-      navigate('/messages');
+      const conv = await startConversation(parseInt(id), currentJob.client);
+      navigate(`/messages?conversation=${conv.id}`);
     } catch (error) {
       console.error('Failed to apply:', error);
     } finally {
@@ -66,8 +66,12 @@ export function JobDetailPage() {
 
   const handleContactFreelancer = async () => {
     if (!currentJob?.freelancer || !id) return;
-    await startConversation(parseInt(id), currentJob.freelancer);
-    navigate('/messages');
+    try {
+      const conv = await startConversation(parseInt(id), currentJob.freelancer);
+      navigate(`/messages?conversation=${conv.id}`);
+    } catch {
+      navigate(`/messages?job=${id}`);
+    }
   };
 
   if (isLoading || !currentJob) {
@@ -245,12 +249,18 @@ export function JobDetailPage() {
                   <CheckCircle2 className="w-6 h-6 mx-auto mb-2" />
                   <p className="font-medium">You're assigned to this project!</p>
                 </div>
-                <Link to={`/messages?job=${id}`}>
-                  <Button className="w-full">
-                    <Send className="w-4 h-4" />
-                    Go to Project Chat
-                  </Button>
-                </Link>
+                <Button className="w-full" onClick={async () => {
+                  if (!currentJob?.client || !id) return;
+                  try {
+                    const conv = await startConversation(parseInt(id), currentJob.client);
+                    navigate(`/messages?conversation=${conv.id}`);
+                  } catch {
+                    navigate(`/messages?job=${id}`);
+                  }
+                }}>
+                  <Send className="w-4 h-4" />
+                  Go to Project Chat
+                </Button>
               </div>
             ) : isRecruiter ? (
               <div className="bg-surface-50 text-surface-600 p-4 rounded-xl text-center">

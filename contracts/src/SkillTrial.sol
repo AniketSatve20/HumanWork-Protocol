@@ -73,14 +73,13 @@ contract SkillTrial is ERC721, Ownable, ReentrancyGuard {
         if (msg.sender != address(aiOracle)) revert OnlyOracle();
         _;
     }
-    
+
     // ============ Constructor ============
 
-    constructor(
-        address _stablecoin,
-        address _userRegistry,
-        address _aiOracle
-    ) ERC721("HumanWork Skill Badge", "HWSKILL") Ownable(msg.sender) {
+    constructor(address _stablecoin, address _userRegistry, address _aiOracle)
+        ERC721("HumanWork Skill Badge", "HWSKILL")
+        Ownable(msg.sender)
+    {
         stablecoin = IERC20(_stablecoin);
         userRegistry = UserRegistry(_userRegistry);
         aiOracle = AIOracle(_aiOracle);
@@ -88,23 +87,18 @@ contract SkillTrial is ERC721, Ownable, ReentrancyGuard {
 
     // ============ Admin Functions ============
 
-    function createTest(
-        string memory title,
-        string memory description,
-        string memory ipfsHash,
-        uint256 fee
-    ) external onlyOwner {
-        skillTests.push(SkillTest({
-            title: title,
-            description: description,
-            ipfsHash: ipfsHash,
-            fee: fee,
-            isActive: true,
-            submissionCount: 0
-        }));
+    function createTest(string memory title, string memory description, string memory ipfsHash, uint256 fee)
+        external
+        onlyOwner
+    {
+        skillTests.push(
+            SkillTest({
+                title: title, description: description, ipfsHash: ipfsHash, fee: fee, isActive: true, submissionCount: 0
+            })
+        );
         emit TestCreated(skillTests.length - 1, title, fee);
     }
-    
+
     // ============ Freelancer Functions ============
 
     function submitTrial(uint256 testId, string memory submissionHash) external nonReentrant returns (uint256) {
@@ -112,25 +106,24 @@ contract SkillTrial is ERC721, Ownable, ReentrancyGuard {
         if (!test.isActive) revert TestNotActive();
 
         if (test.fee > 0) {
-            require(
-                stablecoin.transferFrom(msg.sender, address(this), test.fee),
-                "Fee transfer failed"
-            );
+            require(stablecoin.transferFrom(msg.sender, address(this), test.fee), "Fee transfer failed");
         }
 
         uint256 submissionId = submissions.length;
-        submissions.push(Submission({
-            testId: testId,
-            applicant: msg.sender,
-            submissionHash: submissionHash,
-            status: SubmissionStatus.Pending,
-            submittedAt: block.timestamp,
-            score: 0,
-            report: ""
-        }));
+        submissions.push(
+            Submission({
+                testId: testId,
+                applicant: msg.sender,
+                submissionHash: submissionHash,
+                status: SubmissionStatus.Pending,
+                submittedAt: block.timestamp,
+                score: 0,
+                report: ""
+            })
+        );
 
         test.submissionCount++;
-        
+
         // Request grading from the AI Oracle
         aiOracle.requestSkillGrade(submissionId, msg.sender, submissionHash);
 
@@ -144,22 +137,26 @@ contract SkillTrial is ERC721, Ownable, ReentrancyGuard {
      * @notice Mints the skill badge NFT after AI grading
      * @dev Only callable by the AIOracle contract
      */
-    function mint(address user, uint256 submissionId, uint8 score, string memory report) external onlyAIOracle nonReentrant {
-        
+    function mint(address user, uint256 submissionId, uint8 score, string memory report)
+        external
+        onlyAIOracle
+        nonReentrant
+    {
         Submission storage sub = submissions[submissionId];
-        
+
         // Ensure this submission is pending
         require(sub.status == SubmissionStatus.Pending, "Submission not pending");
-        
+
         sub.status = SubmissionStatus.Graded;
         sub.score = score;
         sub.report = report;
-        
-        if (score >= 80) { // Passing score
+
+        if (score >= 80) {
+            // Passing score
             uint256 badgeId = badgeCounter++;
-            
+
             _safeMint(user, badgeId);
-            
+
             freelancerBadges[user].push(badgeId);
             badgeToSubmissionId[badgeId] = submissionId;
 
@@ -197,7 +194,7 @@ contract SkillTrial is ERC721, Ownable, ReentrancyGuard {
     }
 
     // ============ Admin Functions ============
-    
+
     function setAiOracle(address _aiOracle) external onlyOwner {
         aiOracle = AIOracle(_aiOracle);
     }

@@ -9,9 +9,15 @@ contract MockVerifier is IZKVerifier {
      * This bypasses the actual ZK-SNARK verification which would require off-chain proof generation.
      */
     function verifyProof(
-        bytes memory /* proof */,
+        bytes memory,
+        /* proof */
         uint256[] memory /* pubSignals */
-    ) external pure override returns (bool) {
+    )
+        external
+        pure
+        override
+        returns (bool)
+    {
         return true; // Always verify successfully for demo/testnet
     }
 

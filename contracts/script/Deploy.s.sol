@@ -31,11 +31,11 @@ contract DeployProtocol is Script {
 
         // ============ 0. DEPLOY MOCKS (TESTNET ONLY) ============
         console.log("Deploying Mocks...");
-        
+
         MockUSDC mockUSDC = new MockUSDC();
         STABLECOIN_ADDRESS = address(mockUSDC);
         console.log("  + MockUSDC deployed to:", STABLECOIN_ADDRESS);
-        
+
         MockVerifier mockVerifier = new MockVerifier();
         ZK_VERIFIER_ADDRESS = address(mockVerifier);
         console.log("  + MockVerifier deployed to:", ZK_VERIFIER_ADDRESS);
@@ -50,57 +50,34 @@ contract DeployProtocol is Script {
 
         // ============ 2. DEPLOY IDENTITY & AI LAYER (L1) ============
         console.log("\nDeploying Identity & AI Layer (L1)...");
-        UserRegistry userRegistry = new UserRegistry(
-            ZK_VERIFIER_ADDRESS,
-            STABLECOIN_ADDRESS,
-            address(gasSponsor)
-        );
+        UserRegistry userRegistry = new UserRegistry(ZK_VERIFIER_ADDRESS, STABLECOIN_ADDRESS, address(gasSponsor));
         console.log("  + UserRegistry deployed to:", address(userRegistry));
 
-        AgencyRegistry agencyRegistry = new AgencyRegistry(
-            STABLECOIN_ADDRESS,
-            address(userRegistry)
-        );
+        AgencyRegistry agencyRegistry = new AgencyRegistry(STABLECOIN_ADDRESS, address(userRegistry));
         console.log("  + AgencyRegistry deployed to:", address(agencyRegistry));
 
-        AIOracle aiOracle = new AIOracle(
-            address(agencyRegistry),
-            address(0)
-        );
+        AIOracle aiOracle = new AIOracle(address(agencyRegistry), address(0));
         console.log("  + AIOracle deployed to:", address(aiOracle));
 
-        SkillTrial skillTrial = new SkillTrial(
-            STABLECOIN_ADDRESS,
-            address(userRegistry),
-            address(aiOracle)
-        );
+        SkillTrial skillTrial = new SkillTrial(STABLECOIN_ADDRESS, address(userRegistry), address(aiOracle));
         console.log("  + SkillTrial deployed to:", address(skillTrial));
 
         // ============ 3. DEPLOY COMMERCE & DISPUTE LAYER (L2) ============
         console.log("\nDeploying Commerce & Dispute Layer (L2)...");
-        DisputeJury disputeJury = new DisputeJury(
-            STABLECOIN_ADDRESS,
-            address(userRegistry)
-        );
+        DisputeJury disputeJury = new DisputeJury(STABLECOIN_ADDRESS, address(userRegistry));
         console.log("  + DisputeJury deployed to:", address(disputeJury));
 
-        EnterpriseAccess enterpriseAccess = new EnterpriseAccess(
-            STABLECOIN_ADDRESS,
-            address(agencyRegistry)
-        );
+        EnterpriseAccess enterpriseAccess = new EnterpriseAccess(STABLECOIN_ADDRESS, address(agencyRegistry));
         console.log("  + EnterpriseAccess deployed to:", address(enterpriseAccess));
 
         ProjectEscrow projectEscrow = new ProjectEscrow(
-            STABLECOIN_ADDRESS,
-            address(userRegistry),
-            address(agencyRegistry),
-            address(enterpriseAccess)
+            STABLECOIN_ADDRESS, address(userRegistry), address(agencyRegistry), address(enterpriseAccess)
         );
         console.log("  + ProjectEscrow deployed to:", address(projectEscrow));
 
         // ============ 4. SET PERMISSIONS & AUTHORIZATIONS ============
         console.log("\nSetting Permissions & Authorizations...");
-        
+
         aiOracle.setSkillTrial(address(skillTrial));
         console.log("  + AIOracle updated with SkillTrial address");
 
@@ -121,7 +98,7 @@ contract DeployProtocol is Script {
 
         userRegistry.setAuthorizedCaller(address(projectEscrow), true);
         console.log("  + UserRegistry updated for ProjectEscrow");
-        
+
         userRegistry.setAuthorizedCaller(address(skillTrial), true);
         console.log("  + UserRegistry updated for SkillTrial");
 
@@ -130,14 +107,14 @@ contract DeployProtocol is Script {
 
         // ============ 5. SEED INITIAL DATA (USERS) ============
         console.log("\nSeeding Initial Users...");
-        
-        mockUSDC.mint(demoClient, 50000 * 10**6);
+
+        mockUSDC.mint(demoClient, 50000 * 10 ** 6);
         console.log("  + Minted 50,000 USDC to Demo Client:", demoClient);
-        
-        mockUSDC.mint(demoFreelancer, 10000 * 10**6);
+
+        mockUSDC.mint(demoFreelancer, 10000 * 10 ** 6);
         console.log("  + Minted 10,000 USDC to Demo Freelancer:", demoFreelancer);
 
-        mockUSDC.mint(msg.sender, 100000 * 10**6);
+        mockUSDC.mint(msg.sender, 100000 * 10 ** 6);
         console.log("  + Minted 100,000 USDC to Deployer");
 
         userRegistry.registerBasic();
@@ -146,7 +123,7 @@ contract DeployProtocol is Script {
         userRegistry.verifyHuman(emptyProof, emptySignals);
         console.log("  + Deployer registered & verified as Human");
 
-        mockUSDC.approve(address(agencyRegistry), 500 * 10**6);
+        mockUSDC.approve(address(agencyRegistry), 500 * 10 ** 6);
         agencyRegistry.registerAgency("TechCorp Solutions", keccak256("GST123456789"));
         console.log("  + Deployer registered 'TechCorp Solutions' Agency");
 
@@ -157,29 +134,26 @@ contract DeployProtocol is Script {
             "Junior Solidity Developer",
             "Basic syntax, security patterns, and ERC standards.",
             "QmJuniorSolidityHash",
-            10 * 10**6
+            10 * 10 ** 6
         );
 
         skillTrial.createTest(
             "Smart Contract Security Auditor",
             "Reentrancy, overflow, and gas optimization.",
             "QmSecurityHash",
-            25 * 10**6
+            25 * 10 ** 6
         );
 
         skillTrial.createTest(
-            "DeFi Protocol Architect",
-            "AMM logic, lending pools, and flash loans.",
-            "QmDeFiHash",
-            50 * 10**6
+            "DeFi Protocol Architect", "AMM logic, lending pools, and flash loans.", "QmDeFiHash", 50 * 10 ** 6
         );
-        
+
         console.log("  + Created 3 Skill Tests");
 
         vm.stopBroadcast();
-        
+
         console.log("\n+ HumanWork Protocol V5 Deployed Successfully!");
-        
+
         // Output deployment addresses for frontend
         console.log("\n========== DEPLOYMENT ADDRESSES ==========");
         console.log("VITE_USDC_ADDRESS=", STABLECOIN_ADDRESS);

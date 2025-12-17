@@ -29,9 +29,9 @@ contract AIOracleTest is Test {
         zkVerifier = new MockZKVerifier();
         userRegistry = new UserRegistry(address(zkVerifier), address(usdc), gasSponsor);
         agencyRegistry = new AgencyRegistry(address(usdc), address(userRegistry));
-        
-        skillTrial = new SkillTrial(address(usdc), address(userRegistry), address(0)); 
-        
+
+        skillTrial = new SkillTrial(address(usdc), address(userRegistry), address(0));
+
         aiOracle = new AIOracle(address(agencyRegistry), address(skillTrial));
 
         aiOracle.transferOwnership(backendServer);
@@ -39,7 +39,7 @@ contract AIOracleTest is Test {
         skillTrial.setAiOracle(address(aiOracle));
     }
 
-    function testOwner() public view { 
+    function testOwner() public view {
         assertEq(aiOracle.owner(), backendServer);
     }
 
@@ -51,9 +51,7 @@ contract AIOracleTest is Test {
 
     function testSetSkillTrialNotOwner() public {
         vm.startPrank(address(0x123));
-        vm.expectRevert(
-            abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, address(0x123))
-        );
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, address(0x123)));
         aiOracle.setSkillTrial(address(0x123));
         vm.stopPrank();
     }
@@ -62,24 +60,24 @@ contract AIOracleTest is Test {
         vm.expectRevert("Only AgencyRegistry");
         aiOracle.requestGstVerification(1, bytes32(0));
     }
-    
+
     function testFulfillGstVerification() public {
-        usdc.mint(agency, 1000 * 10**6);
-        
+        usdc.mint(agency, 1000 * 10 ** 6);
+
         vm.prank(agency);
-        usdc.approve(address(agencyRegistry), 500 * 10**6);
-        
+        usdc.approve(address(agencyRegistry), 500 * 10 ** 6);
+
         bytes32 gstHash = keccak256(abi.encodePacked("GST123"));
-        
+
         vm.prank(agency);
         uint256 agencyId = agencyRegistry.registerAgency("TechCorp", gstHash);
-        
+
         // The Job ID for the first agency is 0
-        uint256 jobId = 0; 
-        
+        uint256 jobId = 0;
+
         vm.prank(backendServer);
         aiOracle.fulfillGstVerification(jobId, agencyId, true);
-        
+
         (,,, bool isVerified,,,) = agencyRegistry.getAgency(agencyId);
         assertTrue(isVerified);
     }

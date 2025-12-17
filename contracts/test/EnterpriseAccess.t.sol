@@ -27,14 +27,14 @@ contract EnterpriseAccessTest is Test {
         enterpriseAccess = new EnterpriseAccess(address(usdc), address(agencyRegistry));
 
         // Fund accounts
-        usdc.mint(subAdmin, 10000 * 10**6);
-        usdc.mint(agencyOwner, 10000 * 10**6);
+        usdc.mint(subAdmin, 10000 * 10 ** 6);
+        usdc.mint(agencyOwner, 10000 * 10 ** 6);
     }
 
     function testSubscribeClient() public {
         vm.prank(subAdmin);
-        usdc.approve(address(enterpriseAccess), 5000 * 10**6);
-        
+        usdc.approve(address(enterpriseAccess), 5000 * 10 ** 6);
+
         vm.prank(subAdmin);
         uint256 nftId = enterpriseAccess.subscribe(EnterpriseAccess.Tier.ClientAnnual, "ClientCo");
 
@@ -44,8 +44,8 @@ contract EnterpriseAccessTest is Test {
 
     function testSubscribeAgency() public {
         vm.prank(agencyOwner);
-        usdc.approve(address(enterpriseAccess), 1000 * 10**6);
-        
+        usdc.approve(address(enterpriseAccess), 1000 * 10 ** 6);
+
         vm.prank(agencyOwner);
         uint256 nftId = enterpriseAccess.subscribe(EnterpriseAccess.Tier.AgencyAnnual, "AgencyCo");
 

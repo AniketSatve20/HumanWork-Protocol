@@ -13,11 +13,8 @@ interface IZKVerifier {
      * @param publicSignals Public inputs to the ZK circuit
      * @return bool True if proof is valid
      */
-    function verifyProof(
-        bytes memory zkProof,
-        uint256[] memory publicSignals
-    ) external view returns (bool);
-    
+    function verifyProof(bytes memory zkProof, uint256[] memory publicSignals) external view returns (bool);
+
     /**
      * @notice Returns the proof system version
      */

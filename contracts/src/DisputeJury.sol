@@ -15,16 +15,25 @@ contract DisputeJury is ReentrancyGuard, Ownable {
     IERC20 public immutable STABLECOIN;
     UserRegistry public immutable USER_REGISTRY;
     address public projectEscrowAddress;
-    
-    uint256 public constant MIN_STAKE = 100 * 10**6;
+
+    uint256 public constant MIN_STAKE = 100 * 10 ** 6;
     uint256 public constant JURORS_PER_CASE = 5;
     uint256 public constant VOTING_PERIOD = 7 days;
-    
+
     uint256 public disputeCounter;
-    
-    enum DisputeOutcome { Pending, AcceptAISplit, ClientWins, FreelancerWins }
-    enum VoteChoice { AcceptAI, SideWithClient, SideWithFreelancer }
-    
+
+    enum DisputeOutcome {
+        Pending,
+        AcceptAISplit,
+        ClientWins,
+        FreelancerWins
+    }
+    enum VoteChoice {
+        AcceptAI,
+        SideWithClient,
+        SideWithFreelancer
+    }
+
     struct Dispute {
         uint256 projectId;
         uint256 milestoneIndex;
@@ -44,26 +53,26 @@ contract DisputeJury is ReentrancyGuard, Ownable {
         string aiReport;
         uint8 aiRecommendedSplit;
     }
-    
+
     struct JurorInfo {
         uint256 stakedAmount;
         uint256 casesJudged;
         uint256 reputationScore;
         bool isActive;
     }
-    
+
     mapping(uint256 => Dispute) public disputes;
     mapping(address => JurorInfo) public jurors;
     address[] public activeJurors;
     mapping(address => uint256) public jurorIndices;
-    
+
     event DisputeCreated(uint256 indexed disputeId, uint256 projectId, uint256 milestoneIndex);
     event JurorStaked(address indexed juror, uint256 amount);
     event JurorUnstaked(address indexed juror, uint256 amount);
     event VoteCast(uint256 indexed disputeId, address indexed juror, VoteChoice choice);
     event DisputeResolved(uint256 indexed disputeId, DisputeOutcome outcome);
     event RewardDistributed(address indexed juror, uint256 amount);
-    
+
     error NotVerifiedHuman();
     error InsufficientStake();
     error AlreadyVoted();
@@ -73,17 +82,17 @@ contract DisputeJury is ReentrancyGuard, Ownable {
     error FundsAlreadyDistributed();
     error NotEnoughJurors();
     error Unauthorized();
-    
+
     constructor(address _stablecoin, address _userRegistry) Ownable(msg.sender) {
         STABLECOIN = IERC20(_stablecoin);
         USER_REGISTRY = UserRegistry(_userRegistry);
     }
-    
+
     function stakeAsJuror(uint256 amount) external nonReentrant {
         if (!USER_REGISTRY.isVerifiedHuman(msg.sender)) revert NotVerifiedHuman();
         if (amount < MIN_STAKE) revert InsufficientStake();
         require(STABLECOIN.transferFrom(msg.sender, address(this), amount), "Stake transfer failed");
-        
+
         JurorInfo storage juror = jurors[msg.sender];
         if (!juror.isActive) {
             jurorIndices[msg.sender] = activeJurors.length;
@@ -94,7 +103,7 @@ contract DisputeJury is ReentrancyGuard, Ownable {
         juror.stakedAmount += amount;
         emit JurorStaked(msg.sender, amount);
     }
-    
+
     function unstake(uint256 amount) external nonReentrant {
         JurorInfo storage juror = jurors[msg.sender];
         if (juror.stakedAmount < amount) revert InsufficientStake();
@@ -118,11 +127,17 @@ contract DisputeJury is ReentrancyGuard, Ownable {
         activeJurors.pop();
         delete jurorIndices[jurorToRemove];
     }
-    
-    function createDispute(uint256 projectId, uint256 milestoneIndex, address client, address freelancer, uint256 amount) external returns (uint256) {
+
+    function createDispute(
+        uint256 projectId,
+        uint256 milestoneIndex,
+        address client,
+        address freelancer,
+        uint256 amount
+    ) external returns (uint256) {
         require(msg.sender == projectEscrowAddress, "Only ProjectEscrow");
         if (activeJurors.length < JURORS_PER_CASE) revert NotEnoughJurors();
-        
+
         uint256 disputeId = disputeCounter++;
         Dispute storage dispute = disputes[disputeId];
         dispute.projectId = projectId;
@@ -134,44 +149,44 @@ contract DisputeJury is ReentrancyGuard, Ownable {
         dispute.createdAt = block.timestamp;
         dispute.aiRecommendedSplit = 50;
         dispute.jurors = _selectJurors();
-        
+
         emit DisputeCreated(disputeId, projectId, milestoneIndex);
         return disputeId;
     }
-    
+
     function setAiReport(uint256 disputeId, string memory report, uint8 recommendedSplit) external {
         if (msg.sender != projectEscrowAddress && msg.sender != owner()) revert Unauthorized();
         disputes[disputeId].aiReport = report;
         disputes[disputeId].aiRecommendedSplit = recommendedSplit;
     }
-    
+
     function castVote(uint256 disputeId, VoteChoice choice) external {
         Dispute storage dispute = disputes[disputeId];
         if (block.timestamp > dispute.createdAt + VOTING_PERIOD) revert VotingEnded();
         if (dispute.hasVoted[msg.sender]) revert AlreadyVoted();
         if (!_isJurorInCase(disputeId, msg.sender)) revert NotJurorInCase();
-        
+
         dispute.hasVoted[msg.sender] = true;
         dispute.votes[msg.sender] = choice;
-        
+
         if (choice == VoteChoice.AcceptAI) dispute.votesAcceptAi++;
         else if (choice == VoteChoice.SideWithClient) dispute.votesForClient++;
         else dispute.votesForFreelancer++;
-        
+
         emit VoteCast(disputeId, msg.sender, choice);
-        
+
         if (dispute.votesAcceptAi + dispute.votesForClient + dispute.votesForFreelancer == JURORS_PER_CASE) {
             _tallyVotes(disputeId);
         }
     }
-    
+
     function finalizeDispute(uint256 disputeId) external {
         Dispute storage dispute = disputes[disputeId];
         if (block.timestamp <= dispute.createdAt + VOTING_PERIOD) revert VotingNotEnded();
         if (dispute.outcome != DisputeOutcome.Pending) return;
         _tallyVotes(disputeId);
     }
-    
+
     function _tallyVotes(uint256 disputeId) internal {
         Dispute storage dispute = disputes[disputeId];
         if (dispute.votesAcceptAi >= dispute.votesForClient && dispute.votesAcceptAi >= dispute.votesForFreelancer) {
@@ -184,11 +199,12 @@ contract DisputeJury is ReentrancyGuard, Ownable {
         dispute.resolvedAt = block.timestamp;
         emit DisputeResolved(disputeId, dispute.outcome);
     }
-    
+
     function _selectJurors() internal view returns (address[] memory) {
         address[] memory selected = new address[](JURORS_PER_CASE);
         uint256 count = 0;
-        uint256 startIndex = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao))) % activeJurors.length;
+        uint256 startIndex =
+            uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao))) % activeJurors.length;
         for (uint256 i = 0; i < activeJurors.length && count < JURORS_PER_CASE; i++) {
             uint256 index = (startIndex + i) % activeJurors.length;
             address juror = activeJurors[index];
@@ -198,7 +214,7 @@ contract DisputeJury is ReentrancyGuard, Ownable {
         }
         return selected;
     }
-    
+
     function _isJurorInCase(uint256 disputeId, address juror) internal view returns (bool) {
         address[] storage jurorList = disputes[disputeId].jurors;
         for (uint256 i = 0; i < jurorList.length; i++) {
@@ -206,20 +222,39 @@ contract DisputeJury is ReentrancyGuard, Ownable {
         }
         return false;
     }
-    
-    function getDispute(uint256 disputeId) external view returns (uint256, address, address, uint256, DisputeOutcome, uint256, uint256, uint256, string memory) {
+
+    function getDispute(uint256 disputeId)
+        external
+        view
+        returns (uint256, address, address, uint256, DisputeOutcome, uint256, uint256, uint256, string memory)
+    {
         Dispute storage d = disputes[disputeId];
-        return (d.projectId, d.client, d.freelancer, d.amount, d.outcome, d.votesAcceptAi, d.votesForClient, d.votesForFreelancer, d.aiReport);
+        return (
+            d.projectId,
+            d.client,
+            d.freelancer,
+            d.amount,
+            d.outcome,
+            d.votesAcceptAi,
+            d.votesForClient,
+            d.votesForFreelancer,
+            d.aiReport
+        );
     }
-    
+
     function getJurorInfo(address juror) external view returns (uint256, uint256, uint256, bool) {
         JurorInfo storage info = jurors[juror];
         return (info.stakedAmount, info.casesJudged, info.reputationScore, info.isActive);
     }
-    
-    function getActiveJurorCount() external view returns (uint256) { return activeJurors.length; }
-    function getDisputeJurors(uint256 disputeId) external view returns (address[] memory) { return disputes[disputeId].jurors; }
-    
+
+    function getActiveJurorCount() external view returns (uint256) {
+        return activeJurors.length;
+    }
+
+    function getDisputeJurors(uint256 disputeId) external view returns (address[] memory) {
+        return disputes[disputeId].jurors;
+    }
+
     function setProjectEscrowAddress(address _projectEscrow) external onlyOwner {
         require(projectEscrowAddress == address(0), "Already set");
         projectEscrowAddress = _projectEscrow;
