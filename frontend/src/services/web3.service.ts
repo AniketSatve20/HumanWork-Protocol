@@ -253,13 +253,13 @@ class Web3Service {
   // Event listener setup
   onAccountsChanged(callback: (accounts: string[]) => void): void {
     if (window.ethereum) {
-      window.ethereum.on('accountsChanged', callback as (...args: unknown[]) => void);
+      window.ethereum.on('accountsChanged', callback);
     }
   }
 
   onChainChanged(callback: (chainId: string) => void): void {
     if (window.ethereum) {
-      window.ethereum.on('chainChanged', callback as (...args: unknown[]) => void);
+      window.ethereum.on('chainChanged', callback);
     }
   }
 
@@ -275,12 +275,16 @@ export const web3Service = new Web3Service();
 export default web3Service;
 
 // Type augmentation for window.ethereum
+interface EthereumProvider {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+  on(event: 'accountsChanged', callback: (accounts: string[]) => void): void;
+  on(event: 'chainChanged', callback: (chainId: string) => void): void;
+  on(event: string, callback: (...args: unknown[]) => void): void;
+  removeAllListeners: (event: string) => void;
+}
+
 declare global {
   interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-      on: (event: string, callback: (...args: unknown[]) => void) => void;
-      removeAllListeners: (event: string) => void;
-    };
+    ethereum?: EthereumProvider;
   }
 }

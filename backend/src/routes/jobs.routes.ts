@@ -6,6 +6,8 @@ import { logger } from '../utils/logger.js';
 
 const router = Router();
 
+const MAX_PAGE_SIZE = 100;
+
 // ── GET /api/jobs ─────────────────────────────────────────────────────────────
 // Public: list open job listings with optional filters
 router.get('/', async (req: Request, res: Response) => {
@@ -13,7 +15,7 @@ router.get('/', async (req: Request, res: Response) => {
     const { page = '1', limit = '20', status, category, search, client } = req.query;
 
     const pageNum = parseInt(page as string) || 1;
-    const limitNum = Math.min(parseInt(limit as string) || 20, 100);
+    const limitNum = Math.min(parseInt(limit as string) || 20, MAX_PAGE_SIZE);
     const skip = (pageNum - 1) * limitNum;
 
     const query: Record<string, unknown> = {};
@@ -243,7 +245,7 @@ router.get('/:id/applications', authenticateToken, async (req: Request, res: Res
 
     const { page = '1', limit = '50' } = req.query;
     const pageNum = parseInt(page as string) || 1;
-    const limitNum = Math.min(parseInt(limit as string) || 50, 100);
+    const limitNum = Math.min(parseInt(limit as string) || 50, MAX_PAGE_SIZE);
     const skip = (pageNum - 1) * limitNum;
 
     const job = await JobListing.findOne({ jobId }).lean();
