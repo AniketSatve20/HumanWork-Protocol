@@ -250,6 +250,18 @@ class Web3Service {
     return trial.getFreelancerBadges(address);
   }
 
+  async submitSkillTrial(testId: number, submissionHash: string): Promise<ethers.ContractTransactionResponse> {
+    const trial = this.contracts.skillTrial;
+    if (!trial) throw new Error('SkillTrial contract not initialized');
+    return trial.submitTrial(testId, submissionHash);
+  }
+
+  async createOnChainDispute(projectId: number, milestoneId: number): Promise<ethers.ContractTransactionResponse> {
+    const escrow = this.contracts.projectEscrow;
+    if (!escrow) throw new Error('ProjectEscrow contract not initialized');
+    return escrow.createDispute(projectId, milestoneId);
+  }
+
   // Event listener setup
   onAccountsChanged(callback: (accounts: string[]) => void): void {
     if (window.ethereum) {

@@ -14,6 +14,9 @@ import {
   Briefcase,
   Search,
   Settings,
+  Scale,
+  Award,
+  Shield,
 } from 'lucide-react';
 import { useAuthStore } from '@/context/authStore';
 import { useMessagesStore } from '@/context/messagesStore';
@@ -33,6 +36,8 @@ export function Navbar() {
         { href: '/jobs', label: 'Jobs', icon: Briefcase },
         { href: '/search', label: 'Search', icon: Search },
         { href: '/messages', label: 'Messages', icon: MessageSquare, badge: unreadCount },
+        ...(user?.role === 'freelancer' ? [{ href: '/skills', label: 'Skills', icon: Award }] : []),
+        { href: '/disputes', label: 'Disputes', icon: Scale },
       ]
     : [];
 
@@ -136,6 +141,14 @@ export function Navbar() {
                           >
                             <User className="w-4 h-4" />
                             View Profile
+                          </Link>
+                          <Link
+                            to="/verify"
+                            onClick={() => setIsProfileDropdownOpen(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-surface-700 hover:bg-surface-50 transition-colors"
+                          >
+                            <Shield className="w-4 h-4" />
+                            Verification
                           </Link>
                           <Link
                             to="/settings"

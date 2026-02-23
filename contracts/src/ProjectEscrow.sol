@@ -24,6 +24,12 @@ contract ProjectEscrow is ReentrancyGuard, Ownable {
 
     uint256 public projectCounter;
 
+    // ============ Platform Fee ============
+    uint256 public constant PLATFORM_FEE_BPS = 250; // 2.5% in basis points
+    uint256 public constant BPS_DENOMINATOR = 10_000;
+    address public feeRecipient;
+    uint256 public totalFeesCollected;
+
     enum MilestoneStatus {
         Pending,
         Completed,
@@ -70,6 +76,8 @@ contract ProjectEscrow is ReentrancyGuard, Ownable {
     event MilestoneApproved(uint256 indexed projectId, uint256 indexed milestoneId, uint256 amount);
     event ProjectCancelled(uint256 indexed projectId, address indexed cancelledBy, string reason);
     event DisputeCreated(uint256 indexed projectId, uint256 indexed milestoneId);
+    event PlatformFeeCollected(uint256 indexed projectId, uint256 feeAmount);
+    event FeeRecipientUpdated(address indexed newRecipient);
 
     // ============ Errors ============
 
@@ -91,6 +99,7 @@ contract ProjectEscrow is ReentrancyGuard, Ownable {
         userRegistry = UserRegistry(_userRegistry);
         agencyRegistry = AgencyRegistry(_agencyRegistry);
         enterpriseAccess = EnterpriseAccess(_enterpriseAccess);
+        feeRecipient = msg.sender;
     }
 
     // ============ External Functions ============
@@ -185,7 +194,18 @@ contract ProjectEscrow is ReentrancyGuard, Ownable {
         milestone.status = MilestoneStatus.Approved;
         proj.amountPaid += milestone.amount;
 
-        require(STABLECOIN.transfer(proj.freelancer, milestone.amount), "Payment failed");
+        // Deduct platform fee (2.5%) from milestone payment.
+        // Note: For milestone amounts < 40 USDC (6 decimals), fee rounds to zero.
+        // This is acceptable for micro-payments and aligns with standard BPS rounding.
+        uint256 fee = (milestone.amount * PLATFORM_FEE_BPS) / BPS_DENOMINATOR;
+        uint256 freelancerAmount = milestone.amount - fee;
+
+        if (fee > 0) {
+            require(STABLECOIN.transfer(feeRecipient, fee), "Fee transfer failed");
+            totalFeesCollected += fee;
+            emit PlatformFeeCollected(projectId, fee);
+        }
+        require(STABLECOIN.transfer(proj.freelancer, freelancerAmount), "Payment failed");
 
         // V5 Integration: Add attestation on final milestone approval
         if (proj.amountPaid == proj.totalAmount) {
@@ -279,6 +299,12 @@ contract ProjectEscrow is ReentrancyGuard, Ownable {
 
     function setDisputeJuryAddress(address _juryAddress) external onlyOwner {
         disputeJuryAddress = _juryAddress;
+    }
+
+    function setFeeRecipient(address _feeRecipient) external onlyOwner {
+        require(_feeRecipient != address(0), "Invalid address");
+        feeRecipient = _feeRecipient;
+        emit FeeRecipientUpdated(_feeRecipient);
     }
 }
 

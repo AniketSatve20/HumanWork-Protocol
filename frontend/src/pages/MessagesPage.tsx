@@ -1,22 +1,20 @@
 import { useEffect, useState, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send,
   CheckCircle2,
-  Clock,
   DollarSign,
   AlertTriangle,
   MessageSquare,
-  ChevronRight,
-  Award,
   FileText,
 } from 'lucide-react';
-import { Button, Card, Badge, Skeleton, EmptyState, Progress } from '@/components/common';
+import { Button, Skeleton, EmptyState, Progress } from '@/components/common';
 import { useAuthStore } from '@/context/authStore';
 import { useMessagesStore } from '@/context/messagesStore';
 import { useJobsStore } from '@/context/jobsStore';
 import { web3Service } from '@/services/web3.service';
+import { apiService } from '@/services/api.service';
 import { formatUSDC, formatRelativeTime, formatAddress, generateAvatar, getMilestoneStatusLabel, getMilestoneStatusColor, calculateProgress, cn } from '@/utils/helpers';
 import type { Conversation, Message, Milestone } from '@/types';
 import toast from 'react-hot-toast';
@@ -142,6 +140,7 @@ function MilestonePanel({
   isClient: boolean;
   onAction: () => void;
 }) {
+  const navigate = useNavigate();
   const [loadingMilestone, setLoadingMilestone] = useState<number | null>(null);
 
   const handleComplete = async (milestoneId: number) => {
@@ -240,10 +239,35 @@ function MilestonePanel({
                   <CheckCircle2 className="w-4 h-4" />
                   Approve & Pay
                 </Button>
-                <Button size="sm" variant="ghost">
-                  <AlertTriangle className="w-4 h-4" />
-                  Dispute
-                </Button>
+                <Button size="sm" variant="ghost" onClick={async () => {
+                    setLoadingMilestone(index);
+                    try {
+                      toast.loading('Raising dispute...', { id: 'dispute' });
+                      // Create off-chain dispute record
+                      await apiService.createDispute({
+                        projectId,
+                        milestoneIndex: index,
+                        reason: `Client raised dispute on milestone ${index + 1}`,
+                        amount: milestone.amount,
+                      });
+                      // Optionally trigger on-chain
+                      try {
+                        const tx = await web3Service.createOnChainDispute(projectId, index);
+                        await tx.wait();
+                      } catch {
+                        toast.error('On-chain dispute submission failed, but dispute record was created off-chain.', { id: 'dispute-chain' });
+                      }
+                      toast.success('Dispute raised! Redirecting...', { id: 'dispute' });
+                      navigate('/disputes');
+                    } catch {
+                      toast.error('Failed to raise dispute', { id: 'dispute' });
+                    } finally {
+                      setLoadingMilestone(null);
+                    }
+                  }}>
+                    <AlertTriangle className="w-4 h-4" />
+                    Dispute
+                  </Button>
               </>
             )}
           </div>
@@ -255,7 +279,7 @@ function MilestonePanel({
 
 export function MessagesPage() {
   const [searchParams] = useSearchParams();
-  const { user, address } = useAuthStore();
+  const { address } = useAuthStore();
   const {
     conversations,
     currentConversation,
@@ -266,7 +290,6 @@ export function MessagesPage() {
     fetchConversation,
     fetchMessages,
     sendMessage,
-    startConversation,
     markAsRead,
   } = useMessagesStore();
   const { currentJob, fetchJob } = useJobsStore();

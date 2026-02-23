@@ -355,6 +355,85 @@ class ApiService {
     return response.data;
   }
 
+  // ============ Dispute Endpoints ============
+
+  async getDispute(id: string): Promise<ApiResponse<unknown>> {
+    const response = await this.client.get(`/api/disputes/${id}`);
+    return response.data;
+  }
+
+  async getProjectDisputes(projectId: number): Promise<ApiResponse<unknown[]>> {
+    const response = await this.client.get(`/api/disputes/project/${projectId}`);
+    return response.data;
+  }
+
+  async getMyDisputes(): Promise<ApiResponse<unknown[]>> {
+    const response = await this.client.get('/api/disputes/my/disputes');
+    return response.data;
+  }
+
+  async createDispute(data: {
+    projectId: number;
+    milestoneIndex: number;
+    reason: string;
+    amount: string;
+    counterpartyAddress?: string;
+    evidenceDescription?: string;
+    evidenceIpfsHash?: string;
+  }): Promise<ApiResponse<unknown>> {
+    const response = await this.client.post('/api/disputes', data);
+    return response.data;
+  }
+
+  async addDisputeEvidence(disputeId: string, data: {
+    description: string;
+    ipfsHash?: string;
+  }): Promise<ApiResponse<unknown>> {
+    const response = await this.client.post(`/api/disputes/${disputeId}/evidence`, data);
+    return response.data;
+  }
+
+  // ============ Review Endpoints ============
+
+  async getUserReviews(address: string): Promise<ApiResponse<unknown[]> & { averageRating: string | null; totalReviews: number }> {
+    const response = await this.client.get(`/api/reviews/user/${address}`);
+    return response.data;
+  }
+
+  async getProjectReviews(projectId: number): Promise<ApiResponse<unknown[]>> {
+    const response = await this.client.get(`/api/reviews/project/${projectId}`);
+    return response.data;
+  }
+
+  async submitReview(data: {
+    projectId: number;
+    revieweeAddress: string;
+    reviewerRole: 'client' | 'freelancer';
+    rating: number;
+    comment: string;
+    skillTags?: string[];
+  }): Promise<ApiResponse<unknown>> {
+    const response = await this.client.post('/api/reviews', data);
+    return response.data;
+  }
+
+  // ============ Notification Endpoints ============
+
+  async getNotifications(params?: { page?: number; limit?: number; unreadOnly?: boolean }): Promise<ApiResponse<unknown[]> & { unreadCount: number }> {
+    const response = await this.client.get('/api/notifications', { params });
+    return response.data;
+  }
+
+  async markNotificationRead(id: string): Promise<ApiResponse<unknown>> {
+    const response = await this.client.patch(`/api/notifications/${id}/read`);
+    return response.data;
+  }
+
+  async markAllNotificationsRead(): Promise<ApiResponse<void>> {
+    const response = await this.client.patch('/api/notifications/read-all');
+    return response.data;
+  }
+
   // ============ Stats Endpoints ============
   
   async getPlatformStats(): Promise<ApiResponse<{

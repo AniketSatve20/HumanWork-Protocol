@@ -6,17 +6,18 @@ import {
   Briefcase,
   CheckCircle2,
   Clock,
-  TrendingUp,
   Award,
   Users,
   Plus,
   ArrowRight,
   AlertCircle,
+  Shield,
+  Scale,
 } from 'lucide-react';
 import { Button, Card, StatCard, Badge, Progress, Skeleton } from '@/components/common';
 import { useAuthStore } from '@/context/authStore';
 import { useJobsStore } from '@/context/jobsStore';
-import { formatUSDC, formatRelativeTime, calculateProgress } from '@/utils/helpers';
+import { formatUSDC, calculateProgress } from '@/utils/helpers';
 
 // Freelancer Dashboard Component
 function FreelancerDashboard() {
@@ -171,6 +172,46 @@ function FreelancerDashboard() {
           ))}
         </Card>
       </div>
+
+      {/* Quick Actions */}
+      <div>
+        <h2 className="section-title mb-4">Quick Actions</h2>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <Link to="/skills">
+            <Card className="p-5 card-hover flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-accent-100 flex items-center justify-center">
+                <Award className="w-6 h-6 text-accent-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-surface-900">Take Skill Test</p>
+                <p className="text-sm text-surface-500 mt-0.5">Earn NFT badges</p>
+              </div>
+            </Card>
+          </Link>
+          <Link to="/verify">
+            <Card className="p-5 card-hover flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-primary-100 flex items-center justify-center">
+                <Shield className="w-6 h-6 text-primary-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-surface-900">Get Verified</p>
+                <p className="text-sm text-surface-500 mt-0.5">Boost your trust score</p>
+              </div>
+            </Card>
+          </Link>
+          <Link to="/disputes">
+            <Card className="p-5 card-hover flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-warning-100 flex items-center justify-center">
+                <Scale className="w-6 h-6 text-warning-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-surface-900">Disputes</p>
+                <p className="text-sm text-surface-500 mt-0.5">Manage your cases</p>
+              </div>
+            </Card>
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
@@ -178,7 +219,7 @@ function FreelancerDashboard() {
 // Recruiter Dashboard Component
 function RecruiterDashboard() {
   const { user, address } = useAuthStore();
-  const { myJobs, isLoading, fetchMyJobs } = useJobsStore();
+  const { myJobs, fetchMyJobs } = useJobsStore();
 
   useEffect(() => {
     if (address) {
@@ -374,6 +415,46 @@ function RecruiterDashboard() {
             </Link>
           </Card>
         )}
+      </div>
+
+      {/* Quick Actions for Recruiter */}
+      <div>
+        <h2 className="section-title mb-4">Quick Actions</h2>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <Link to="/jobs/create">
+            <Card className="p-5 card-hover flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-accent-100 flex items-center justify-center">
+                <Plus className="w-6 h-6 text-accent-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-surface-900">Post a Job</p>
+                <p className="text-sm text-surface-500 mt-0.5">Find top talent</p>
+              </div>
+            </Card>
+          </Link>
+          <Link to="/verify">
+            <Card className="p-5 card-hover flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-primary-100 flex items-center justify-center">
+                <Shield className="w-6 h-6 text-primary-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-surface-900">Verification</p>
+                <p className="text-sm text-surface-500 mt-0.5">Build client trust</p>
+              </div>
+            </Card>
+          </Link>
+          <Link to="/disputes">
+            <Card className="p-5 card-hover flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-warning-100 flex items-center justify-center">
+                <Scale className="w-6 h-6 text-warning-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-surface-900">Disputes</p>
+                <p className="text-sm text-surface-500 mt-0.5">Manage your cases</p>
+              </div>
+            </Card>
+          </Link>
+        </div>
       </div>
     </div>
   );
