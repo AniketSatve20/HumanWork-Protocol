@@ -6,7 +6,6 @@ import {
   Bell,
   Shield,
   Eye,
-  Palette,
   Save,
   Copy,
   Check,
@@ -14,7 +13,7 @@ import {
 } from 'lucide-react';
 import { Button, Card, Input, Textarea, Badge } from '@/components/common';
 import { useAuthStore } from '@/context/authStore';
-import { formatAddress, copyToClipboard, generateAvatar, cn } from '@/utils/helpers';
+import { copyToClipboard, generateAvatar, cn } from '@/utils/helpers';
 import toast from 'react-hot-toast';
 
 const tabs = [

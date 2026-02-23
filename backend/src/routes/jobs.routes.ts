@@ -92,6 +92,24 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       return;
     }
 
+    // Validate string lengths
+    if (typeof title !== 'string' || title.length > 200) {
+      res.status(400).json({ success: false, error: 'Title must be a string of at most 200 characters' });
+      return;
+    }
+    if (typeof description !== 'string' || description.length > 10000) {
+      res.status(400).json({ success: false, error: 'Description must be a string of at most 10000 characters' });
+      return;
+    }
+    if (typeof category !== 'string' || category.length > 100) {
+      res.status(400).json({ success: false, error: 'Category must be a string of at most 100 characters' });
+      return;
+    }
+    if (milestones.length > 20) {
+      res.status(400).json({ success: false, error: 'A job can have at most 20 milestones' });
+      return;
+    }
+
     // Validate milestones and compute total budget
     let budget = 0;
     for (const m of milestones) {
@@ -166,6 +184,10 @@ router.post('/:id/apply', authenticateToken, async (req: Request, res: Response)
       res.status(400).json({ success: false, error: 'Cover letter and proposed amount are required' });
       return;
     }
+    if (typeof coverLetter !== 'string' || coverLetter.length > 5000) {
+      res.status(400).json({ success: false, error: 'Cover letter must be at most 5000 characters' });
+      return;
+    }
 
     // Check for duplicate application
     const existing = await Application.findOne({
@@ -219,6 +241,11 @@ router.get('/:id/applications', authenticateToken, async (req: Request, res: Res
       return;
     }
 
+    const { page = '1', limit = '50' } = req.query;
+    const pageNum = parseInt(page as string) || 1;
+    const limitNum = Math.min(parseInt(limit as string) || 50, 100);
+    const skip = (pageNum - 1) * limitNum;
+
     const job = await JobListing.findOne({ jobId }).lean();
     if (!job) {
       res.status(404).json({ success: false, error: 'Job not found' });
@@ -229,9 +256,16 @@ router.get('/:id/applications', authenticateToken, async (req: Request, res: Res
       return;
     }
 
-    const applications = await Application.find({ jobId }).sort({ createdAt: -1 }).lean();
+    const [applications, total] = await Promise.all([
+      Application.find({ jobId }).sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean(),
+      Application.countDocuments({ jobId }),
+    ]);
 
-    res.json({ success: true, applications });
+    res.json({
+      success: true,
+      applications,
+      pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
+    });
   } catch (error) {
     logger.error('Failed to get applications:', error);
     res.status(500).json({ success: false, error: 'Failed to get applications' });

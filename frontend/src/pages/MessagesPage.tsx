@@ -4,15 +4,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send,
   CheckCircle2,
-  Clock,
   DollarSign,
   AlertTriangle,
   MessageSquare,
-  ChevronRight,
-  Award,
   FileText,
 } from 'lucide-react';
-import { Button, Card, Badge, Skeleton, EmptyState, Progress } from '@/components/common';
+import { Button, Skeleton, EmptyState, Progress } from '@/components/common';
 import { useAuthStore } from '@/context/authStore';
 import { useMessagesStore } from '@/context/messagesStore';
 import { useJobsStore } from '@/context/jobsStore';
@@ -255,7 +252,7 @@ function MilestonePanel({
 
 export function MessagesPage() {
   const [searchParams] = useSearchParams();
-  const { user, address } = useAuthStore();
+  const { address } = useAuthStore();
   const {
     conversations,
     currentConversation,
@@ -266,7 +263,6 @@ export function MessagesPage() {
     fetchConversation,
     fetchMessages,
     sendMessage,
-    startConversation,
     markAsRead,
   } = useMessagesStore();
   const { currentJob, fetchJob } = useJobsStore();

@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import {
   Search,
   Filter,
-  MapPin,
   Clock,
   DollarSign,
   Briefcase,
@@ -12,7 +11,7 @@ import {
   X,
   Plus,
 } from 'lucide-react';
-import { Button, Card, Badge, Input, Skeleton, EmptyState } from '@/components/common';
+import { Button, Card, Badge, Skeleton, EmptyState } from '@/components/common';
 import { useAuthStore } from '@/context/authStore';
 import { useJobsStore } from '@/context/jobsStore';
 import { formatUSDC, formatRelativeTime, cn } from '@/utils/helpers';
@@ -110,9 +109,9 @@ function JobCard({ job, isRecruiter }: { job: Job; isRecruiter: boolean }) {
 }
 
 export function JobsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { user } = useAuthStore();
-  const { jobs, featuredJobs, isLoading, fetchJobs, fetchFeaturedJobs, filters, setFilters } = useJobsStore();
+  const { jobs, featuredJobs, isLoading, fetchJobs, fetchFeaturedJobs, setFilters } = useJobsStore();
   
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || 'All Categories');

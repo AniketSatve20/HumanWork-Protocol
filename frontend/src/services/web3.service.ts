@@ -253,13 +253,13 @@ class Web3Service {
   // Event listener setup
   onAccountsChanged(callback: (accounts: string[]) => void): void {
     if (window.ethereum) {
-      window.ethereum.on('accountsChanged', callback);
+      window.ethereum.on('accountsChanged', callback as (...args: unknown[]) => void);
     }
   }
 
   onChainChanged(callback: (chainId: string) => void): void {
     if (window.ethereum) {
-      window.ethereum.on('chainChanged', callback);
+      window.ethereum.on('chainChanged', callback as (...args: unknown[]) => void);
     }
   }
 
