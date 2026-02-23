@@ -54,5 +54,11 @@ export const authenticateToken = (
 };
 
 export function generateToken(walletAddress: string): string {
-  return jwt.sign({ walletAddress }, SECRET_KEY, { expiresIn: config.jwt.expiresIn });
+  const options: jwt.SignOptions = {};
+  const expiresIn = config.jwt.expiresIn;
+  if (expiresIn) {
+    // expiresIn accepts string time spans (e.g. '7d') or seconds as number
+    options.expiresIn = /^\d+$/.test(expiresIn) ? parseInt(expiresIn, 10) : expiresIn as any;
+  }
+  return jwt.sign({ walletAddress }, SECRET_KEY, options);
 }

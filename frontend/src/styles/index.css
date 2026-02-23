@@ -98,6 +98,23 @@
     @apply bg-white/70 backdrop-blur-xl border border-white/20 shadow-glass;
   }
 
+  /* Dark card for landing page */
+  .card-dark {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(8px);
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: all 500ms;
+  }
+
+  .card-dark-hover:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(0, 112, 224, 0.3);
+    box-shadow: 0 8px 40px rgba(0, 112, 224, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transform: translateY(-4px);
+  }
+
   /* Input styles */
   .input {
     @apply w-full px-4 py-3 rounded-xl border border-surface-300 bg-white
@@ -180,6 +197,46 @@
 
   .section-title {
     @apply text-2xl font-bold font-display text-surface-900;
+  }
+
+  /* Blockchain grid background */
+  .blockchain-grid {
+    background-image: 
+      linear-gradient(rgba(0, 112, 224, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 112, 224, 0.05) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+
+  /* Glow border effect */
+  .glow-border {
+    position: relative;
+  }
+  .glow-border::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(0, 112, 224, 0.5), rgba(255, 122, 80, 0.5), rgba(0, 112, 224, 0.5));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Shimmer text effect */
+  .shimmer-text {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.6) 0%,
+      rgba(255, 255, 255, 1) 50%,
+      rgba(255, 255, 255, 0.6) 100%
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
 }
 

@@ -12,6 +12,7 @@ import jobsRoutes from './routes/jobs.routes.js';
 import skillsRoutes from './routes/skills.routes.js';
 import statsRoutes from './routes/stats.routes.js';
 import messagesRoutes from './routes/messages.routes.js';
+import disputesRoutes from './routes/disputes.routes.js';
 
 // Import workers
 import { oracleWorker } from './workers/oracle.worker.js';
@@ -44,6 +45,7 @@ app.use('/api/jobs', jobsRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/messages', messagesRoutes);
+app.use('/api/disputes', disputesRoutes);
 
 // 404 handler
 app.use((_req, res) => {

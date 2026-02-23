@@ -6,7 +6,6 @@ import {
   Briefcase,
   CheckCircle2,
   Clock,
-  TrendingUp,
   Award,
   Users,
   Plus,
@@ -16,7 +15,7 @@ import {
 import { Button, Card, StatCard, Badge, Progress, Skeleton } from '@/components/common';
 import { useAuthStore } from '@/context/authStore';
 import { useJobsStore } from '@/context/jobsStore';
-import { formatUSDC, formatRelativeTime, calculateProgress } from '@/utils/helpers';
+import { formatUSDC, calculateProgress } from '@/utils/helpers';
 
 // Freelancer Dashboard Component
 function FreelancerDashboard() {
@@ -178,7 +177,7 @@ function FreelancerDashboard() {
 // Recruiter Dashboard Component
 function RecruiterDashboard() {
   const { user, address } = useAuthStore();
-  const { myJobs, isLoading, fetchMyJobs } = useJobsStore();
+  const { myJobs, fetchMyJobs } = useJobsStore();
 
   useEffect(() => {
     if (address) {

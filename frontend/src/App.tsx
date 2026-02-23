@@ -10,6 +10,8 @@ import {
   CreateJobPage,
   MessagesPage,
   SettingsPage,
+  ProfilePage,
+  DisputesPage,
 } from '@/pages';
 import { useAuthStore } from '@/context/authStore';
 
@@ -117,6 +119,15 @@ export function App() {
             element={
               <ProtectedRoute>
                 <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/profile/:address" element={<ProfilePage />} />
+          <Route
+            path="/disputes"
+            element={
+              <ProtectedRoute>
+                <DisputesPage />
               </ProtectedRoute>
             }
           />

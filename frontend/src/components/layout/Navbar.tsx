@@ -14,6 +14,7 @@ import {
   Briefcase,
   Search,
   Settings,
+  Scale,
 } from 'lucide-react';
 import { useAuthStore } from '@/context/authStore';
 import { useMessagesStore } from '@/context/messagesStore';
@@ -33,6 +34,7 @@ export function Navbar() {
         { href: '/jobs', label: 'Jobs', icon: Briefcase },
         { href: '/search', label: 'Search', icon: Search },
         { href: '/messages', label: 'Messages', icon: MessageSquare, badge: unreadCount },
+        { href: '/disputes', label: 'Disputes', icon: Scale },
       ]
     : [];
 

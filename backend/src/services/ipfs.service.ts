@@ -1,10 +1,16 @@
-import PinataSDK from '@pinata/sdk';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const PinataSDK = require('@pinata/sdk');
 import { Readable } from 'stream';
 import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
+interface PinataInstance {
+  pinFileToIPFS(stream: Readable, options?: object): Promise<{ IpfsHash: string }>;
+  pinJSONToIPFS(body: object, options?: object): Promise<{ IpfsHash: string }>;
+}
+
 class IPFSService {
-  private pinata: PinataSDK | null = null;
+  private pinata: PinataInstance | null = null;
 
   constructor() {
     if (config.pinata.apiKey && config.pinata.secretKey) {

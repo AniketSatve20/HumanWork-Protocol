@@ -6,10 +6,7 @@ import {
   Building2,
   ArrowRight,
   CheckCircle2,
-  Briefcase,
-  DollarSign,
   Shield,
-  Zap,
 } from 'lucide-react';
 import { Button, Input } from '@/components/common';
 import { useAuthStore } from '@/context/authStore';

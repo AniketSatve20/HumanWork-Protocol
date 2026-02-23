@@ -3,7 +3,7 @@ import multer from 'multer';
 import { uploadProjectBrief } from '../controllers/project.controller.js';
 import { blockchainService } from '../services/blockchain.service.js';
 import { logger } from '../utils/logger.js';
-import { Project } from '../models/Project.js';
+import { Project, MilestoneStatus, ProjectStatus } from '../models/Project.js';
 
 const router = Router();
 
@@ -127,6 +127,100 @@ router.get('/stats/:address', async (req: Request, res: Response) => {
   } catch (error) {
     logger.error(`Failed to get stats for ${req.params.address}:`, error);
     res.status(500).json({ success: false, error: 'Failed to get stats' });
+  }
+});
+
+// POST /:id/milestones/:milestoneIndex/complete - Mark milestone as completed by freelancer
+router.post('/:id/milestones/:milestoneIndex/complete', async (req: Request, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const milestoneIndex = parseInt(req.params.milestoneIndex);
+    const { deliverableIpfsHash } = req.body;
+
+    const project = await Project.findOne({ projectId });
+    if (!project) {
+      res.status(404).json({ success: false, error: 'Project not found' });
+      return;
+    }
+
+    if (milestoneIndex < 0 || milestoneIndex >= project.milestones.length) {
+      res.status(400).json({ success: false, error: 'Invalid milestone index' });
+      return;
+    }
+
+    const milestone = project.milestones[milestoneIndex];
+    if (milestone.status !== MilestoneStatus.Pending) {
+      res.status(400).json({ success: false, error: `Milestone is already ${MilestoneStatus[milestone.status]}` });
+      return;
+    }
+
+    milestone.status = MilestoneStatus.Completed;
+    milestone.completionTime = new Date();
+    if (deliverableIpfsHash) {
+      milestone.deliverableIpfsHash = deliverableIpfsHash;
+    }
+
+    await project.save();
+
+    res.json({
+      success: true,
+      project: project.toObject(),
+      message: `Milestone ${milestoneIndex} marked as completed`,
+    });
+  } catch (error) {
+    logger.error(`Failed to complete milestone:`, error);
+    res.status(500).json({ success: false, error: 'Failed to complete milestone' });
+  }
+});
+
+// POST /:id/milestones/:milestoneIndex/approve - Approve milestone by client
+router.post('/:id/milestones/:milestoneIndex/approve', async (req: Request, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const milestoneIndex = parseInt(req.params.milestoneIndex);
+
+    const project = await Project.findOne({ projectId });
+    if (!project) {
+      res.status(404).json({ success: false, error: 'Project not found' });
+      return;
+    }
+
+    if (milestoneIndex < 0 || milestoneIndex >= project.milestones.length) {
+      res.status(400).json({ success: false, error: 'Invalid milestone index' });
+      return;
+    }
+
+    const milestone = project.milestones[milestoneIndex];
+    if (milestone.status !== MilestoneStatus.Completed) {
+      res.status(400).json({ success: false, error: 'Milestone must be completed before approval' });
+      return;
+    }
+
+    milestone.status = MilestoneStatus.Approved;
+
+    // Update amount paid
+    const currentPaid = parseFloat(project.amountPaid || '0');
+    const milestoneAmount = parseFloat(milestone.amount || '0');
+    project.amountPaid = (currentPaid + milestoneAmount).toString();
+
+    // Check if all milestones are approved
+    const allApproved = project.milestones.every(m => m.status === MilestoneStatus.Approved);
+    if (allApproved) {
+      project.status = ProjectStatus.Completed;
+    }
+
+    await project.save();
+
+    res.json({
+      success: true,
+      project: project.toObject(),
+      message: allApproved
+        ? `Milestone ${milestoneIndex} approved. Project completed!`
+        : `Milestone ${milestoneIndex} approved`,
+    });
+  } catch (error) {
+    logger.error(`Failed to approve milestone:`, error);
+    res.status(500).json({ success: false, error: 'Failed to approve milestone' });
   }
 });
 
