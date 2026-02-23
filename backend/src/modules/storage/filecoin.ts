@@ -1,4 +1,5 @@
-import PinataSDK from '@pinata/sdk';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const PinataSDK = require('@pinata/sdk');
 import FormData from 'form-data';
 import axios from 'axios';
 import { Readable } from 'stream';
@@ -22,7 +23,7 @@ interface UploadOptions {
 }
 
 class FilecoinStorage {
-  private pinata: PinataSDK | null = null;
+  private pinata: any = null;
   private readonly gateway: string;
   private initialized: boolean = false;
 

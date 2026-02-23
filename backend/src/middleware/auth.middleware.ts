@@ -54,5 +54,6 @@ export const authenticateToken = (
 };
 
 export function generateToken(walletAddress: string): string {
-  return jwt.sign({ walletAddress }, SECRET_KEY, { expiresIn: config.jwt.expiresIn });
+  const expiresIn = (config.jwt.expiresIn || '7d') as any;
+  return jwt.sign({ walletAddress }, SECRET_KEY, { expiresIn });
 }
