@@ -11,10 +11,7 @@ import {
 } from 'lucide-react';
 import { Button, Card, Input, Textarea, Badge } from '@/components/common';
 import { useAuthStore } from '@/context/authStore';
-import { web3Service } from '@/services/web3.service';
 import { apiService } from '@/services/api.service';
-import { parseUSDC } from '@/utils/helpers';
-import { config } from '@/utils/config';
 import toast from 'react-hot-toast';
 
 const categories = [
@@ -55,7 +52,6 @@ export function CreateJobPage() {
   const [milestones, setMilestones] = useState<Milestone[]>([
     { description: '', amount: '' },
   ]);
-  const [freelancerAddress, setFreelancerAddress] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const totalBudget = milestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0);
@@ -79,10 +75,6 @@ export function CreateJobPage() {
       if (!m.description.trim()) newErrors[`milestone_${i}_desc`] = 'Description required';
       if (!m.amount || parseFloat(m.amount) <= 0) newErrors[`milestone_${i}_amount`] = 'Valid amount required';
     });
-    if (!freelancerAddress.trim()) newErrors.freelancer = 'Freelancer address is required';
-    if (freelancerAddress && !freelancerAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
-      newErrors.freelancer = 'Invalid Ethereum address';
-    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -125,44 +117,29 @@ export function CreateJobPage() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      const ipfsResponse = await apiService.createJob({
+      toast.loading('Posting job listing...', { id: 'create' });
+
+      const response = await apiService.createJobListing({
         title,
         description,
         category,
         skills,
+        duration,
         milestones: milestones.map(m => ({
           description: m.description,
           amount: m.amount,
         })),
       });
 
-      if (!ipfsResponse.success || !ipfsResponse.data?.ipfsHash) {
-        throw new Error('Failed to upload job to IPFS');
+      if (!response.success || !response.data?.jobId) {
+        throw new Error('Failed to create job listing');
       }
 
-      const totalAmount = parseUSDC(totalBudget.toString());
-      
-      toast.loading('Approving USDC...', { id: 'approve' });
-      const approveTx = await web3Service.approveUSDC(config.contracts.projectEscrow, totalAmount);
-      await approveTx.wait();
-      toast.success('USDC approved!', { id: 'approve' });
-
-      toast.loading('Creating project...', { id: 'create' });
-      const milestoneAmounts = milestones.map(m => parseUSDC(m.amount));
-      const milestoneDescriptions = milestones.map(m => m.description);
-      
-      const createTx = await web3Service.createProject(
-        freelancerAddress,
-        milestoneAmounts,
-        milestoneDescriptions
-      );
-      await createTx.wait();
-      toast.success('Project created successfully!', { id: 'create' });
-
+      toast.success('Job posted successfully! Freelancers can now apply.', { id: 'create' });
       navigate('/jobs');
     } catch (error: unknown) {
       console.error('Failed to create job:', error);
-      toast.error((error as Error).message || 'Failed to create job');
+      toast.error((error as Error).message || 'Failed to create job', { id: 'create' });
     } finally {
       setIsSubmitting(false);
     }
@@ -189,6 +166,7 @@ export function CreateJobPage() {
           Back
         </button>
         <h1 className="text-2xl font-display font-bold text-surface-900">Post a New Job</h1>
+        <p className="text-surface-600 mt-1">Your job will be listed publicly. Freelancers can apply and you'll choose who to hire.</p>
       </div>
 
       <div className="flex items-center gap-4 mb-8">
@@ -254,7 +232,10 @@ export function CreateJobPage() {
       {step === 'milestones' && (
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
           <Card className="p-6 space-y-6">
-            <Input label="Freelancer Wallet Address" placeholder="0x..." value={freelancerAddress} onChange={(e) => setFreelancerAddress(e.target.value)} error={errors.freelancer} helperText="Enter the wallet address of the freelancer." />
+            <div className="bg-primary-50 rounded-xl p-4 text-sm text-primary-700">
+              <p className="font-medium mb-1">💡 How it works</p>
+              <p>Set your milestones and budget here. Once you receive applications and accept a freelancer, you'll lock the funds into escrow via a smart contract.</p>
+            </div>
             <div>
               <div className="flex items-center justify-between mb-4">
                 <label className="block text-sm font-medium text-surface-700">Project Milestones</label>
@@ -270,10 +251,12 @@ export function CreateJobPage() {
                     <div className="grid sm:grid-cols-3 gap-3">
                       <div className="sm:col-span-2">
                         <input type="text" placeholder="Milestone description..." value={milestone.description} onChange={(e) => handleMilestoneChange(index, 'description', e.target.value)} className="input" />
+                        {errors[`milestone_${index}_desc`] && <p className="text-xs text-error-500 mt-1">{errors[`milestone_${index}_desc`]}</p>}
                       </div>
                       <div className="relative">
                         <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
                         <input type="number" placeholder="Amount" value={milestone.amount} onChange={(e) => handleMilestoneChange(index, 'amount', e.target.value)} className="input pl-9" />
+                        {errors[`milestone_${index}_amount`] && <p className="text-xs text-error-500 mt-1">{errors[`milestone_${index}_amount`]}</p>}
                       </div>
                     </div>
                   </div>
@@ -305,24 +288,26 @@ export function CreateJobPage() {
                 <div className="p-4 bg-surface-50 rounded-xl"><p className="text-sm text-surface-500">Category</p><p className="font-medium text-surface-900">{category}</p></div>
                 <div className="p-4 bg-surface-50 rounded-xl"><p className="text-sm text-surface-500">Duration</p><p className="font-medium text-surface-900">{duration}</p></div>
               </div>
-              <div className="p-4 bg-surface-50 rounded-xl"><p className="text-sm text-surface-500 mb-2">Freelancer</p><p className="font-mono text-sm text-surface-900">{freelancerAddress}</p></div>
               <div className="p-4 bg-surface-50 rounded-xl">
                 <p className="text-sm text-surface-500 mb-3">Milestones</p>
                 <div className="space-y-2">
                   {milestones.map((m, i) => (<div key={i} className="flex items-center justify-between"><span className="text-surface-700">{m.description}</span><span className="font-semibold">${m.amount}</span></div>))}
-                  <div className="flex items-center justify-between pt-2 border-t border-surface-200"><span className="font-medium">Total</span><span className="text-lg font-bold text-primary-600">${totalBudget.toLocaleString()}</span></div>
+                  <div className="flex items-center justify-between pt-2 border-t border-surface-200"><span className="font-medium">Total Budget</span><span className="text-lg font-bold text-primary-600">${totalBudget.toLocaleString()}</span></div>
                 </div>
               </div>
             </div>
-            <div className="bg-warning-50 rounded-xl p-4">
+            <div className="bg-success-50 rounded-xl p-4">
               <div className="flex gap-3">
-                <AlertCircle className="w-5 h-5 text-warning-500 flex-shrink-0" />
-                <p className="text-sm text-warning-600">You'll need to approve the USDC transfer to the escrow contract.</p>
+                <CheckCircle2 className="w-5 h-5 text-success-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-success-700">No upfront payment required</p>
+                  <p className="text-sm text-success-600 mt-1">Your job will be posted publicly. When you accept a freelancer, you'll approve and lock the USDC funds into a smart contract escrow.</p>
+                </div>
               </div>
             </div>
             <div className="flex gap-3 pt-4">
               <Button variant="secondary" onClick={() => setStep('milestones')}>Back</Button>
-              <Button className="flex-1" onClick={handleSubmit} isLoading={isSubmitting}>Post Job & Lock Funds</Button>
+              <Button className="flex-1" onClick={handleSubmit} isLoading={isSubmitting}>Post Job</Button>
             </div>
           </Card>
         </motion.div>

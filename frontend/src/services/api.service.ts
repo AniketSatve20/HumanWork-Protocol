@@ -1,6 +1,38 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { config } from '@/utils/config';
-import type { Job, Conversation, Message, ApiResponse, Milestone, JobStatus } from '@/types';
+import type { Job, JobApplication, Conversation, Message, ApiResponse, Milestone, JobStatus } from '@/types';
+
+// Map backend JobListing to frontend Job
+function mapJobListingToJob(listing: Record<string, unknown>): Job {
+  const milestones = (listing.milestones as Array<Record<string, unknown>> || []).map((m, idx) => ({
+    id: idx,
+    description: m.description as string || `Milestone ${idx + 1}`,
+    amount: m.amount as string || '0',
+    status: 0, // Always pending for open listings
+    completionTime: undefined,
+  })) as Milestone[];
+
+  return {
+    id: listing.jobId as number,
+    title: listing.title as string || '',
+    description: listing.description as string || '',
+    category: listing.category as string || 'General',
+    skills: listing.skills as string[] || [],
+    budget: listing.budget as string || '0',
+    duration: listing.duration as string || '',
+    status: (listing.status as JobStatus) || 'open',
+    client: listing.clientAddress as string || '',
+    clientName: listing.clientName as string,
+    clientAvatar: listing.clientAvatar as string,
+    freelancer: listing.assignedFreelancerAddress as string,
+    milestones,
+    totalAmount: listing.budget as string || '0',
+    amountPaid: '0',
+    createdAt: listing.createdAt as string || new Date().toISOString(),
+    applicants: listing.applicantCount as number || 0,
+    ipfsHash: listing.ipfsHash as string,
+  };
+}
 
 // Map backend Project to frontend Job
 function mapProjectToJob(project: Record<string, unknown>): Job {
@@ -134,6 +166,7 @@ class ApiService {
     };
   }
 
+  // Get open job listings from the off-chain database
   async getJobs(params?: {
     page?: number;
     limit?: number;
@@ -141,7 +174,13 @@ class ApiService {
     category?: string;
     search?: string;
   }): Promise<ApiResponse<Job[]>> {
-    return this.getProjects(params);
+    const response = await this.client.get('/api/jobs', { params });
+    const jobs = response.data.jobs || [];
+    return {
+      success: response.data.success,
+      data: jobs.map(mapJobListingToJob),
+      pagination: response.data.pagination,
+    };
   }
 
   async getProject(id: number): Promise<ApiResponse<Job>> {
@@ -153,18 +192,35 @@ class ApiService {
   }
 
   async getJob(id: number): Promise<ApiResponse<Job>> {
+    try {
+      const response = await this.client.get(`/api/jobs/${id}`);
+      if (response.data.success && response.data.job) {
+        return { success: true, data: mapJobListingToJob(response.data.job) };
+      }
+    } catch (err) {
+      console.debug(`Job listing ${id} not found in /api/jobs, falling back to /api/projects`, err);
+    }
+    // Fallback to on-chain project (for assigned/active projects)
     return this.getProject(id);
   }
 
-  async getMyProjects(address: string, role: 'client' | 'freelancer'): Promise<ApiResponse<Job[]>> {
-    const params = role === 'client' 
-      ? { client: address } 
-      : { freelancer: address };
-    return this.getProjects(params);
+  async getMyJobs(address: string, role: 'client' | 'freelancer'): Promise<ApiResponse<Job[]>> {
+    if (role === 'client') {
+      // Client: fetch their job listings (all statuses)
+      const response = await this.client.get('/api/jobs', { params: { client: address, status: 'all' } });
+      const jobs = response.data.jobs || [];
+      return {
+        success: response.data.success,
+        data: jobs.map(mapJobListingToJob),
+        pagination: response.data.pagination,
+      };
+    }
+    // Freelancer: fetch their on-chain projects
+    return this.getProjects({ freelancer: address });
   }
 
-  async getMyJobs(address: string, role: 'client' | 'freelancer'): Promise<ApiResponse<Job[]>> {
-    return this.getMyProjects(address, role);
+  async getMyProjects(address: string, role: 'client' | 'freelancer'): Promise<ApiResponse<Job[]>> {
+    return this.getMyJobs(address, role);
   }
 
   async getProjectStats(address: string): Promise<ApiResponse<{
@@ -188,6 +244,25 @@ class ApiService {
     return response.data;
   }
 
+  // Create an off-chain job listing (no blockchain call)
+  async createJobListing(data: {
+    title: string;
+    description: string;
+    category: string;
+    skills: string[];
+    duration: string;
+    milestones: { description: string; amount: string }[];
+  }): Promise<ApiResponse<{ jobId: number; job: Job }>> {
+    const response = await this.client.post('/api/jobs', data);
+    return {
+      success: response.data.success,
+      data: response.data.job
+        ? { jobId: response.data.job.jobId, job: mapJobListingToJob(response.data.job) }
+        : undefined,
+    };
+  }
+
+  // Legacy: keep createJob for backwards compatibility (uploads to IPFS)
   async createJob(data: {
     title: string;
     description: string;
@@ -302,16 +377,41 @@ class ApiService {
 
   // ============ Placeholder Endpoints ============
   
-  async applyToJob(_jobId: number, _data: {
+  async applyToJob(jobId: number, data: {
     coverLetter: string;
     proposedAmount: string;
     estimatedDuration: string;
-  }): Promise<ApiResponse<unknown>> {
-    return { success: true, data: {} };
+  }): Promise<ApiResponse<JobApplication>> {
+    const response = await this.client.post(`/api/jobs/${jobId}/apply`, data);
+    return response.data;
   }
 
-  async getApplications(_jobId: number): Promise<ApiResponse<unknown[]>> {
-    return { success: true, data: [] };
+  async getApplications(jobId: number): Promise<ApiResponse<JobApplication[]>> {
+    const response = await this.client.get(`/api/jobs/${jobId}/applications`);
+    const applications = (response.data.applications || []).map((a: Record<string, unknown>) => ({
+      id: a._id as string,
+      jobId: a.jobId as number,
+      freelancerAddress: a.freelancerAddress as string,
+      freelancerName: (a.freelancerAddress as string || '').slice(0, 10) + '...',
+      coverLetter: a.coverLetter as string,
+      proposedAmount: a.proposedAmount as string,
+      estimatedDuration: a.estimatedDuration as string,
+      status: a.status as 'pending' | 'accepted' | 'rejected',
+      createdAt: a.createdAt as string,
+    })) as JobApplication[];
+    return { success: response.data.success, data: applications };
+  }
+
+  async acceptApplication(jobId: number, applicationId: string): Promise<ApiResponse<{
+    freelancerAddress: string;
+  }>> {
+    const response = await this.client.post(`/api/jobs/${jobId}/accept`, { applicationId });
+    return response.data;
+  }
+
+  async linkOnChainProject(jobId: number, onChainProjectId: number): Promise<ApiResponse<unknown>> {
+    const response = await this.client.post(`/api/jobs/${jobId}/project`, { onChainProjectId });
+    return response.data;
   }
 }
 

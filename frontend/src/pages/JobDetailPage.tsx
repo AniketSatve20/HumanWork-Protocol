@@ -7,19 +7,20 @@ import {
   DollarSign,
   CheckCircle2,
   AlertCircle,
-  User,
   Send,
   Briefcase,
-  Award,
-  MapPin,
-  Calendar,
-  ExternalLink,
+  Users,
 } from 'lucide-react';
-import { Button, Card, Badge, Textarea, Skeleton, Progress } from '@/components/common';
+import { Button, Card, Badge, Textarea, Skeleton } from '@/components/common';
 import { useAuthStore } from '@/context/authStore';
 import { useJobsStore } from '@/context/jobsStore';
 import { useMessagesStore } from '@/context/messagesStore';
-import { formatUSDC, formatDate, formatRelativeTime, getMilestoneStatusLabel, getMilestoneStatusColor, cn } from '@/utils/helpers';
+import { apiService } from '@/services/api.service';
+import { web3Service } from '@/services/web3.service';
+import { parseUSDC, formatUSDC, formatDate, formatRelativeTime, getMilestoneStatusLabel, getMilestoneStatusColor, cn } from '@/utils/helpers';
+import { config } from '@/utils/config';
+import type { JobApplication } from '@/types';
+import toast from 'react-hot-toast';
 
 export function JobDetailPage() {
   const { id } = useParams();
@@ -33,15 +34,33 @@ export function JobDetailPage() {
   const [proposedAmount, setProposedAmount] = useState('');
   const [isApplying, setIsApplying] = useState(false);
 
+  // Applications management (for job owner)
+  const [applications, setApplications] = useState<JobApplication[]>([]);
+  const [isLoadingApplications, setIsLoadingApplications] = useState(false);
+  const [isAccepting, setIsAccepting] = useState<string | null>(null); // applicationId being accepted
+
   const isRecruiter = user?.role === 'recruiter';
-  const isOwner = currentJob?.client === address;
-  const isAssignedFreelancer = currentJob?.freelancer === address;
+  const isOwner = currentJob?.client?.toLowerCase() === address?.toLowerCase();
+  const isAssignedFreelancer = currentJob?.freelancer?.toLowerCase() === address?.toLowerCase();
 
   useEffect(() => {
     if (id) {
       fetchJob(parseInt(id));
     }
   }, [id, fetchJob]);
+
+  // Fetch applications when owner is viewing an open job
+  useEffect(() => {
+    if (isOwner && currentJob?.status === 'open' && id) {
+      setIsLoadingApplications(true);
+      apiService.getApplications(parseInt(id))
+        .then((res) => {
+          if (res.success && res.data) setApplications(res.data);
+        })
+        .catch(console.error)
+        .finally(() => setIsLoadingApplications(false));
+    }
+  }, [isOwner, currentJob?.status, id]);
 
   const handleApply = async () => {
     if (!currentJob || !id) return;
@@ -53,14 +72,75 @@ export function JobDetailPage() {
         proposedAmount,
         estimatedDuration: currentJob.duration,
       });
+      toast.success('Application submitted! The client will review it.');
       setShowApplyModal(false);
       // Start conversation with client
       const conv = await startConversation(parseInt(id), currentJob.client);
       navigate(`/messages?conversation=${conv.id}`);
     } catch (error) {
       console.error('Failed to apply:', error);
+      toast.error('Failed to submit application. Please try again.');
     } finally {
       setIsApplying(false);
+    }
+  };
+
+  const handleAcceptFreelancer = async (application: JobApplication) => {
+    if (!currentJob || !id) return;
+    setIsAccepting(application.id);
+    try {
+      // 1. Mark application as accepted in backend
+      const acceptRes = await apiService.acceptApplication(parseInt(id), application.id);
+      if (!acceptRes.success) throw new Error('Failed to accept application');
+
+      const freelancerAddress = acceptRes.data?.freelancerAddress || application.freelancerAddress;
+
+      // 2. Approve USDC for the escrow contract
+      toast.loading('Approving USDC...', { id: 'escrow' });
+      const totalAmount = parseUSDC(currentJob.budget);
+      const approveTx = await web3Service.approveUSDC(config.contracts.projectEscrow, totalAmount);
+      await approveTx.wait();
+      toast.loading('Creating escrow contract...', { id: 'escrow' });
+
+      // 3. Create on-chain project (locks funds in escrow)
+      const milestoneAmounts = currentJob.milestones.map(m => parseUSDC(m.amount));
+      const milestoneDescriptions = currentJob.milestones.map(m => m.description);
+      const createTx = await web3Service.createProject(freelancerAddress, milestoneAmounts, milestoneDescriptions);
+      const receipt = await createTx.wait();
+
+      // 4. Extract the on-chain project ID from the ProjectCreated event log.
+      // ProjectCreated(uint256 indexed projectId, address indexed client, address indexed freelancer, uint256 totalAmount)
+      // topics[0] = event signature hash, topics[1] = projectId (first indexed param)
+      let onChainProjectId: number | undefined;
+      if (receipt?.logs) {
+        for (const log of receipt.logs) {
+          if (
+            log.address.toLowerCase() === config.contracts.projectEscrow.toLowerCase() &&
+            log.topics &&
+            log.topics.length >= 4
+          ) {
+            try {
+              onChainProjectId = parseInt(log.topics[1], 16);
+              break;
+            } catch { /* ignore parsing error */ }
+          }
+        }
+      }
+
+      // 5. Link on-chain project ID back to the job listing
+      if (onChainProjectId) {
+        await apiService.linkOnChainProject(parseInt(id), onChainProjectId);
+      }
+
+      toast.success(`Freelancer accepted! Funds locked in escrow. ${onChainProjectId ? `Project #${onChainProjectId} created.` : ''}`, { id: 'escrow' });
+
+      // Refresh job to show updated status
+      fetchJob(parseInt(id));
+    } catch (error: unknown) {
+      console.error('Failed to accept freelancer:', error);
+      toast.error((error as Error).message || 'Failed to create escrow contract', { id: 'escrow' });
+    } finally {
+      setIsAccepting(null);
     }
   };
 
@@ -206,6 +286,67 @@ export function JobDetailPage() {
               ))}
             </div>
           </Card>
+
+          {/* Applications Card - only visible to job owner for open jobs */}
+          {isOwner && currentJob.status === 'open' && (
+            <Card className="p-6">
+              <h2 className="text-lg font-semibold text-surface-900 mb-4 flex items-center gap-2">
+                <Users className="w-5 h-5 text-primary-500" />
+                Applications ({applications.length})
+              </h2>
+              {isLoadingApplications ? (
+                <p className="text-sm text-surface-500">Loading applications...</p>
+              ) : applications.length === 0 ? (
+                <div className="text-center py-6">
+                  <Users className="w-10 h-10 text-surface-300 mx-auto mb-3" />
+                  <p className="text-surface-600">No applications yet. Share your job listing to attract freelancers.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {applications.map((app) => (
+                    <div key={app.id} className="p-4 border border-surface-200 rounded-xl">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={`https://api.dicebear.com/7.x/identicon/svg?seed=${app.freelancerAddress}`}
+                            alt=""
+                            className="w-10 h-10 rounded-xl"
+                          />
+                          <div>
+                            <p className="font-medium text-surface-900 font-mono text-sm">
+                              {app.freelancerAddress.slice(0, 6)}...{app.freelancerAddress.slice(-4)}
+                            </p>
+                            <p className="text-xs text-surface-500">{app.estimatedDuration}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-surface-900">${parseFloat(app.proposedAmount).toLocaleString()}</p>
+                          <Badge
+                            variant={app.status === 'accepted' ? 'success' : app.status === 'rejected' ? 'error' : 'primary'}
+                            className="text-xs mt-1"
+                          >
+                            {app.status}
+                          </Badge>
+                        </div>
+                      </div>
+                      <p className="text-sm text-surface-700 mb-3 line-clamp-3">{app.coverLetter}</p>
+                      {app.status === 'pending' && (
+                        <Button
+                          size="sm"
+                          className="w-full"
+                          onClick={() => handleAcceptFreelancer(app)}
+                          isLoading={isAccepting === app.id}
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          Accept & Create Escrow
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
         </div>
 
         {/* Sidebar */}
@@ -231,11 +372,9 @@ export function JobDetailPage() {
               </div>
             ) : isOwner ? (
               <div className="space-y-3">
-                <Link to={`/jobs/${id}/applications`}>
-                  <Button className="w-full">
-                    View Applications ({currentJob.applicants || 0})
-                  </Button>
-                </Link>
+                <p className="text-sm text-surface-600 text-center">
+                  {applications.length} application{applications.length !== 1 ? 's' : ''} received
+                </p>
                 {currentJob.freelancer && (
                   <Button variant="secondary" className="w-full" onClick={handleContactFreelancer}>
                     <Send className="w-4 h-4" />

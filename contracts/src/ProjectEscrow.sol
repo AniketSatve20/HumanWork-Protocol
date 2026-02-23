@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
+import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "./UserRegistry.sol";
 import "./AgencyRegistry.sol";
 import "./EnterpriseAccess.sol";
@@ -12,7 +13,7 @@ import "./EnterpriseAccess.sol";
  * @notice B2B Escrow with dynamic milestones and dispute handling
  * @dev Integrates with UserRegistry, AgencyRegistry, and EnterpriseAccess
  */
-contract ProjectEscrow is ReentrancyGuard {
+contract ProjectEscrow is ReentrancyGuard, Ownable {
     // ============ State Variables ============
 
     IERC20 public immutable STABLECOIN;
@@ -83,7 +84,9 @@ contract ProjectEscrow is ReentrancyGuard {
 
     // ============ Constructor ============
 
-    constructor(address _stablecoin, address _userRegistry, address _agencyRegistry, address _enterpriseAccess) {
+    constructor(address _stablecoin, address _userRegistry, address _agencyRegistry, address _enterpriseAccess)
+        Ownable(msg.sender)
+    {
         STABLECOIN = IERC20(_stablecoin);
         userRegistry = UserRegistry(_userRegistry);
         agencyRegistry = AgencyRegistry(_agencyRegistry);
@@ -274,8 +277,7 @@ contract ProjectEscrow is ReentrancyGuard {
 
     // ============ Admin Functions ============
 
-    function setDisputeJuryAddress(address _juryAddress) external {
-        // This should be onlyOwner, but v1 test doesn't have it.
+    function setDisputeJuryAddress(address _juryAddress) external onlyOwner {
         disputeJuryAddress = _juryAddress;
     }
 }
