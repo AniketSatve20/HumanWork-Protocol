@@ -10,6 +10,9 @@ import {
   CreateJobPage,
   MessagesPage,
   SettingsPage,
+  DisputePage,
+  SkillTestPage,
+  VerificationPage,
 } from '@/pages';
 import { useAuthStore } from '@/context/authStore';
 
@@ -117,6 +120,30 @@ export function App() {
             element={
               <ProtectedRoute>
                 <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/disputes"
+            element={
+              <ProtectedRoute>
+                <DisputePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/skills"
+            element={
+              <ProtectedRoute>
+                <SkillTestPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/verify"
+            element={
+              <ProtectedRoute>
+                <VerificationPage />
               </ProtectedRoute>
             }
           />

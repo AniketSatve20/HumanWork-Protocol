@@ -6,3 +6,6 @@ export { JobDetailPage } from './JobDetailPage';
 export { CreateJobPage } from './CreateJobPage';
 export { MessagesPage } from './MessagesPage';
 export { SettingsPage } from './SettingsPage';
+export { DisputePage } from './DisputePage';
+export { SkillTestPage } from './SkillTestPage';
+export { VerificationPage } from './VerificationPage';
