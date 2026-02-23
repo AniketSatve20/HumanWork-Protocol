@@ -37,6 +37,12 @@ interface ReputationData {
   isVerifiedHuman: boolean;
 }
 
+interface SkillBadge {
+  name?: string;
+  score?: number;
+  tokenId?: string;
+}
+
 const levelLabels: Record<number, string> = {
   0: 'Unverified',
   1: 'Basic',
@@ -53,7 +59,7 @@ export function ProfilePage() {
   const { address } = useParams<{ address: string }>();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [reputation, setReputation] = useState<ReputationData | null>(null);
-  const [badges, setBadges] = useState<unknown[]>([]);
+  const [badges, setBadges] = useState<SkillBadge[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -75,7 +81,7 @@ export function ProfilePage() {
           setReputation(repRes.data);
         }
         if (badgesRes.success && badgesRes.data) {
-          setBadges((badgesRes.data as { badges: unknown[] }).badges || []);
+          setBadges(((badgesRes.data as { badges: SkillBadge[] }).badges || []));
         }
       } catch (err) {
         console.error('Failed to load profile:', err);
@@ -284,7 +290,7 @@ export function ProfilePage() {
               Skill Badges ({badges.length})
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              {badges.map((badge: any, i: number) => (
+              {badges.map((badge, i) => (
                 <div key={i} className="p-3 bg-surface-50 rounded-xl border border-surface-200">
                   <p className="font-medium text-sm text-surface-900">{badge.name || `Badge #${i + 1}`}</p>
                   {badge.score && <p className="text-xs text-surface-500 mt-1">Score: {badge.score}</p>}

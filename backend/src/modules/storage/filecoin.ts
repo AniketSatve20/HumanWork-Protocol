@@ -22,8 +22,14 @@ interface UploadOptions {
   metadata?: Record<string, string>;
 }
 
+interface PinataInstance {
+  pinJSONToIPFS(body: object, options?: object): Promise<PinataResponse>;
+  testAuthentication(): Promise<{ authenticated: boolean }>;
+  unpin(hash: string): Promise<unknown>;
+}
+
 class FilecoinStorage {
-  private pinata: any = null;
+  private pinata: PinataInstance | null = null;
   private readonly gateway: string;
   private initialized: boolean = false;
 
@@ -38,7 +44,7 @@ class FilecoinStorage {
       this.pinata = new PinataSDK(config.pinata.apiKey, config.pinata.secretKey);
       
       try {
-        const result = await this.pinata.testAuthentication();
+        const result = await this.pinata!.testAuthentication();
         logger.info('✅ Pinata authenticated:', result);
         this.initialized = true;
       } catch (error) {
