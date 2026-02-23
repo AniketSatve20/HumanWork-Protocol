@@ -8,6 +8,7 @@ import { connectDatabase } from './database.js';
 import authRoutes from './routes/auth.routes.js';
 import usersRoutes from './routes/users.routes.js';
 import projectsRoutes from './routes/projects.routes.js';
+import jobsRoutes from './routes/jobs.routes.js';
 import skillsRoutes from './routes/skills.routes.js';
 import statsRoutes from './routes/stats.routes.js';
 import messagesRoutes from './routes/messages.routes.js';
@@ -39,6 +40,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/projects', projectsRoutes);
+app.use('/api/jobs', jobsRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/messages', messagesRoutes);
