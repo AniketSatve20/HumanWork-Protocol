@@ -163,3 +163,37 @@ export interface ApiResponse<T> {
     pages: number;
   };
 }
+
+// Dispute Types
+export enum DisputeOutcome {
+  Pending = 0,
+  AcceptAISplit = 1,
+  ClientWins = 2,
+  FreelancerWins = 3,
+}
+
+export interface DisputeVote {
+  juror: string;
+  choice: number;
+  timestamp: string;
+}
+
+export interface Dispute {
+  disputeId: number;
+  projectId: number;
+  milestoneIndex: number;
+  client: string;
+  freelancer: string;
+  amount: string;
+  jurors: string[];
+  votes: DisputeVote[];
+  votesAcceptAi: number;
+  votesForClient: number;
+  votesForFreelancer: number;
+  outcome: DisputeOutcome;
+  aiReport: string;
+  aiRecommendedSplit: number;
+  createdAt: string;
+  resolvedAt?: string;
+  fundsDistributed: boolean;
+}

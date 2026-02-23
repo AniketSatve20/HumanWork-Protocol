@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { config } from '@/utils/config';
-import type { Job, JobApplication, Conversation, Message, ApiResponse, Milestone, JobStatus } from '@/types';
+import type { Job, JobApplication, Conversation, Message, ApiResponse, Milestone, JobStatus, Dispute } from '@/types';
 
 // Map backend JobListing to frontend Job
 function mapJobListingToJob(listing: Record<string, unknown>): Job {
@@ -411,6 +411,64 @@ class ApiService {
 
   async linkOnChainProject(jobId: number, onChainProjectId: number): Promise<ApiResponse<unknown>> {
     const response = await this.client.post(`/api/jobs/${jobId}/project`, { onChainProjectId });
+    return response.data;
+  }
+
+  // ============ Dispute Endpoints ============
+
+  async getDisputes(params?: {
+    page?: number;
+    limit?: number;
+    status?: number;
+    role?: string;
+  }): Promise<ApiResponse<Dispute[]>> {
+    const response = await this.client.get('/api/disputes', { params });
+    return {
+      success: response.data.success,
+      data: response.data.disputes || [],
+      pagination: response.data.pagination,
+    };
+  }
+
+  async getDispute(id: number): Promise<ApiResponse<Dispute>> {
+    const response = await this.client.get(`/api/disputes/${id}`);
+    return {
+      success: response.data.success,
+      data: response.data.dispute,
+    };
+  }
+
+  async createDispute(data: {
+    projectId: number;
+    milestoneIndex: number;
+    reason: string;
+  }): Promise<ApiResponse<Dispute>> {
+    const response = await this.client.post('/api/disputes', data);
+    return {
+      success: response.data.success,
+      data: response.data.dispute,
+    };
+  }
+
+  async voteOnDispute(disputeId: number, choice: number): Promise<ApiResponse<Dispute>> {
+    const response = await this.client.post(`/api/disputes/${disputeId}/vote`, { choice });
+    return {
+      success: response.data.success,
+      data: response.data.dispute,
+    };
+  }
+
+  // ============ Milestone Endpoints ============
+
+  async completeMilestone(projectId: number, milestoneIndex: number, deliverableIpfsHash?: string): Promise<ApiResponse<unknown>> {
+    const response = await this.client.post(`/api/projects/${projectId}/milestones/${milestoneIndex}/complete`, {
+      deliverableIpfsHash,
+    });
+    return response.data;
+  }
+
+  async approveMilestone(projectId: number, milestoneIndex: number): Promise<ApiResponse<unknown>> {
+    const response = await this.client.post(`/api/projects/${projectId}/milestones/${milestoneIndex}/approve`);
     return response.data;
   }
 }
