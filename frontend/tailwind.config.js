@@ -74,8 +74,12 @@ export default {
         'glass': '0 8px 32px 0 rgba(0, 112, 224, 0.1)',
         'glass-lg': '0 25px 50px -12px rgba(0, 112, 224, 0.15)',
         'neon': '0 0 20px rgba(255, 122, 80, 0.3)',
+        'neon-blue': '0 0 30px rgba(0, 112, 224, 0.4)',
+        'neon-purple': '0 0 30px rgba(139, 92, 246, 0.3)',
         'card': '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
         'card-hover': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
+        'dark-card': '0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+        'dark-card-hover': '0 8px 40px rgba(0, 112, 224, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
@@ -90,6 +94,10 @@ export default {
         'slide-down': 'slideDown 0.5s ease-out',
         'fade-in': 'fadeIn 0.5s ease-out',
         'scale-in': 'scaleIn 0.3s ease-out',
+        'glow-pulse': 'glowPulse 3s ease-in-out infinite',
+        'orbit': 'orbit 20s linear infinite',
+        'orbit-reverse': 'orbit 25s linear infinite reverse',
+        'shimmer': 'shimmer 3s linear infinite',
       },
       keyframes: {
         float: {
@@ -115,6 +123,18 @@ export default {
         scaleIn: {
           '0%': { transform: 'scale(0.95)', opacity: '0' },
           '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        glowPulse: {
+          '0%, 100%': { opacity: '0.4' },
+          '50%': { opacity: '1' },
+        },
+        orbit: {
+          '0%': { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
         },
       },
     },
