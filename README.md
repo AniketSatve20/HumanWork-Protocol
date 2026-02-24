@@ -248,12 +248,27 @@ Check Backend Terminal for AI-PM Logs!
 - **RPC**: https://testnet.hashio.io/api
 - **Explorer**: https://testnet.hashscan.io
 
-## 📚 Documentation
+## 📊 Project Status
 
-- [ARCHITECTURE.md](./docs/ARCHITECTURE.md) - System design
-- [DEPLOYMENT.md](./docs/DEPLOYMENT.md) - Deployment guide
-- [TESTING.md](./docs/TESTING.md) - Testing procedures
-- [QUICK_START.md](./docs/QUICK_START.md) - 5-minute setup
+> Last updated: February 2025
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **Smart Contracts** | ✅ Complete | 9 core + 3 mock contracts, all with unit tests |
+| **Contract Tests** | ✅ Complete | 10 test files (9 unit + 1 integration) via Foundry |
+| **Backend API** | ⚠️ Builds with errors | 5 TypeScript errors (PinataSDK types, JWT types) |
+| **Frontend UI** | ⚠️ Builds with errors | Missing `lucide-react` dependency, unused imports |
+| **Backend Tests** | ❌ Not yet added | No test files present; `vitest` configured but unused |
+| **Deployment** | ✅ Testnet-ready | Hedera testnet scripts and config in place |
+| **Documentation** | ⚠️ Partial | README comprehensive; detailed docs not yet created |
+| **LICENSE** | ❌ Missing | Referenced in README but file not yet added |
+
+### Known Issues
+
+- **Backend**: `@pinata/sdk` type incompatibilities and `jsonwebtoken` `expiresIn` type mismatch
+- **Frontend**: `lucide-react` package not installed; several unused import warnings
+- **Submodules**: `forge-std` and `openzeppelin-contracts` are present and populated
+- **Build artifacts**: `out/`, `cache/` directories are tracked in git (should be in `.gitignore`)
 
 ## 🤝 Contributing
 
@@ -266,7 +281,7 @@ Check Backend Terminal for AI-PM Logs!
 
 ## 📄 License
 
-MIT License - see LICENSE file for details.
+MIT License
 
 ## 🙏 Acknowledgments
 
