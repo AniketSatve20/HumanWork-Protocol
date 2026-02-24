@@ -10,3 +10,8 @@
 # Dependencies
 node_modules/
 
+# Build artifacts
+out/
+cache/
+foundry.lock
+
