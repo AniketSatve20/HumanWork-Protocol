@@ -1,9 +1,14 @@
 import { Router, Request, Response } from 'express';
+import { escapeRegex, ensureString } from '../utils/sanitize.js';
 import multer from 'multer';
 import { uploadProjectBrief } from '../controllers/project.controller.js';
 import { blockchainService } from '../services/blockchain.service.js';
+import { authenticateToken } from '../middleware/auth.middleware.js';
 import { logger } from '../utils/logger.js';
 import { Project } from '../models/Project.js';
+import {
+  sendSuccess, sendNotFound, sendServerError, buildPagination,
+} from '../utils/apiResponse.js';
 
 const router = Router();
 
@@ -12,7 +17,8 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }
 });
 
-router.post('/upload', upload.single('file'), uploadProjectBrief);
+// File upload requires authentication
+router.post('/upload', authenticateToken, upload.single('file'), uploadProjectBrief);
 
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -51,16 +57,21 @@ router.get('/', async (req: Request, res: Response) => {
       }
     }
     
-    if (client) query.clientLower = (client as string).toLowerCase();
-    if (freelancer) query.freelancerLower = (freelancer as string).toLowerCase();
-    if (category) query.category = category;
+    const clientStr = ensureString(client);
+    const freelancerStr = ensureString(freelancer);
+    const categoryStr = ensureString(category);
+    if (clientStr) query.clientLower = clientStr.toLowerCase();
+    if (freelancerStr) query.freelancerLower = freelancerStr.toLowerCase();
+    if (categoryStr) query.category = categoryStr;
     
-    // Text search
-    if (search) {
+    // Text search — escape regex metacharacters to prevent ReDoS / injection
+    const searchStr = ensureString(search);
+    if (searchStr) {
+      const escaped = escapeRegex(searchStr);
       query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { category: { $regex: search, $options: 'i' } },
+        { title: { $regex: escaped, $options: 'i' } },
+        { description: { $regex: escaped, $options: 'i' } },
+        { category: { $regex: escaped, $options: 'i' } },
       ];
     }
 
@@ -69,36 +80,10 @@ router.get('/', async (req: Request, res: Response) => {
       Project.countDocuments(query),
     ]);
 
-    res.json({
-      success: true,
-      projects,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        pages: Math.ceil(total / limitNum),
-      },
-    });
+    sendSuccess(res, projects, buildPagination(pageNum, limitNum, total));
   } catch (error) {
     logger.error('Failed to list projects:', error);
-    res.status(500).json({ success: false, error: 'Failed to list projects' });
-  }
-});
-
-router.get('/:id', async (req: Request, res: Response) => {
-  try {
-    const projectId = parseInt(req.params.id);
-    const project = await Project.findOne({ projectId }).lean();
-    
-    if (project) {
-      res.json({ success: true, project, source: 'database' });
-      return;
-    }
-    
-    const onChainProject = await blockchainService.getProject(projectId);
-    res.json({ success: true, project: onChainProject, source: 'blockchain' });
-  } catch (error) {
-    res.status(404).json({ success: false, error: 'Project not found' });
+    sendServerError(res, 'Failed to list projects');
   }
 });
 
@@ -117,16 +102,27 @@ router.get('/stats/:address', async (req: Request, res: Response) => {
       ]),
     ]);
 
-    res.json({
-      success: true,
-      stats: {
-        asClient: asClient,
-        asFreelancer: asFreelancer,
-      },
-    });
+    sendSuccess(res, { asClient, asFreelancer });
   } catch (error) {
     logger.error(`Failed to get stats for ${req.params.address}:`, error);
-    res.status(500).json({ success: false, error: 'Failed to get stats' });
+    sendServerError(res, 'Failed to get stats');
+  }
+});
+
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const project = await Project.findOne({ projectId }).lean();
+    
+    if (project) {
+      sendSuccess(res, { ...project, source: 'database' });
+      return;
+    }
+    
+    const onChainProject = await blockchainService.getProject(projectId);
+    sendSuccess(res, { ...onChainProject, source: 'blockchain' });
+  } catch (error) {
+    sendNotFound(res, 'Project not found');
   }
 });
 

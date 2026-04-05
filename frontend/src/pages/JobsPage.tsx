@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import {
   Search,
   Filter,
-  MapPin,
   Clock,
   DollarSign,
   Briefcase,
@@ -12,9 +11,10 @@ import {
   X,
   Plus,
 } from 'lucide-react';
-import { Button, Card, Badge, Input, Skeleton, EmptyState } from '@/components/common';
+import { Button, Card, Badge, Skeleton, EmptyState } from '@/components/common';
 import { useAuthStore } from '@/context/authStore';
 import { useJobsStore } from '@/context/jobsStore';
+import { useSoundSystem } from '@/components/ui/SoundSystem';
 import { formatUSDC, formatRelativeTime, cn } from '@/utils/helpers';
 import type { Job } from '@/types';
 
@@ -46,7 +46,7 @@ function JobCard({ job, isRecruiter }: { job: Job; isRecruiter: boolean }) {
       transition={{ duration: 0.2 }}
     >
       <Link to={`/jobs/${job.id}`}>
-        <Card className="p-6 h-full card-hover">
+        <Card className="p-6 h-full delos-card">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
               <img
@@ -64,9 +64,9 @@ function JobCard({ job, isRecruiter }: { job: Job; isRecruiter: boolean }) {
             </Badge>
           </div>
 
-          <h3 className="text-lg font-semibold text-surface-900 mb-2 line-clamp-2">
-            {job.title}
-          </h3>
+            <h3 className="font-serif tracking-widest text-xl text-[#F5F5F5] mb-2" style={{ fontFamily: 'Bodoni Moda, serif', letterSpacing: '0.12em' }}>
+              {job.title}
+            </h3>
           
           <p className="text-surface-600 text-sm mb-4 line-clamp-2">
             {job.description}
@@ -92,7 +92,7 @@ function JobCard({ job, isRecruiter }: { job: Job; isRecruiter: boolean }) {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1 text-sm text-surface-600">
                 <DollarSign className="w-4 h-4" />
-                <span className="font-semibold text-surface-900">{formatUSDC(job.budget)}</span>
+                <span className="font-mono text-[#83858D]">{formatUSDC(job.budget)}</span>
               </div>
               <div className="flex items-center gap-1 text-sm text-surface-500">
                 <Clock className="w-4 h-4" />
@@ -110,9 +110,10 @@ function JobCard({ job, isRecruiter }: { job: Job; isRecruiter: boolean }) {
 }
 
 export function JobsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { user } = useAuthStore();
-  const { jobs, featuredJobs, isLoading, fetchJobs, fetchFeaturedJobs, filters, setFilters } = useJobsStore();
+  const { jobs, featuredJobs, isLoading, fetchJobs, fetchFeaturedJobs, setFilters } = useJobsStore();
+  const { playNavigationHum } = useSoundSystem();
   
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || 'All Categories');
@@ -120,6 +121,9 @@ export function JobsPage() {
   const [showFilters, setShowFilters] = useState(false);
 
   const isRecruiter = user?.role === 'recruiter';
+
+  // BR2049 atmospheric hum on page entry
+  useEffect(() => { playNavigationHum(); }, [playNavigationHum]);
 
   useEffect(() => {
     fetchJobs();
@@ -150,36 +154,42 @@ export function JobsPage() {
   const hasActiveFilters = searchQuery || selectedCategory !== 'All Categories' || selectedBudget !== 0;
 
   return (
-    <div className="min-h-screen bg-surface-50">
+    <div className="min-h-screen">
       {/* Hero Section */}
-      <div className="bg-gradient-to-br from-primary-600 to-primary-800 py-12 relative overflow-hidden">
-        <div className="absolute inset-0 bg-hero-pattern opacity-10" />
+      <div className="relative py-16 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary-500/10 via-surface-50 to-accent-500/10" />
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary-500/[0.06] rounded-full blur-[120px]" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-accent-500/[0.04] rounded-full blur-[100px]" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h1 className="text-3xl sm:text-4xl font-display font-bold text-white">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center"
+          >
+            <h1 className="text-3xl sm:text-4xl font-display font-bold text-surface-900">
               {isRecruiter ? 'Manage Your Jobs' : 'Find Your Next Opportunity'}
             </h1>
-            <p className="mt-2 text-lg text-white/80 max-w-2xl mx-auto">
+            <p className="mt-2 text-lg text-surface-600 max-w-2xl mx-auto">
               {isRecruiter
                 ? 'Post jobs and find the perfect freelancers for your projects.'
                 : 'Browse through verified job listings with secure escrow payments.'}
             </p>
-          </div>
+          </motion.div>
 
           {/* Search Bar */}
           <form onSubmit={handleSearch} className="mt-8 max-w-2xl mx-auto">
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-500" />
                 <input
                   type="text"
                   placeholder="Search jobs by title, skills, or description..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3.5 rounded-xl border-0 bg-white shadow-lg focus:ring-2 focus:ring-primary-300"
+                  className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-surface-200/50 bg-surface-100/60 backdrop-blur-lg shadow-lg shadow-black/10 focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500/50 text-surface-800 placeholder:text-surface-500 transition-all duration-200"
                 />
               </div>
-              <Button type="submit" className="px-6">
+              <Button type="submit" className="px-6 shadow-neon">
                 Search
               </Button>
             </div>
@@ -214,7 +224,7 @@ export function JobsPage() {
           <div className="relative">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-surface-200 rounded-xl hover:border-surface-300 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-surface-100/80 border border-surface-200/50 rounded-xl hover:border-surface-300 transition-colors"
             >
               <Filter className="w-4 h-4" />
               <span>{selectedCategory}</span>
@@ -222,7 +232,7 @@ export function JobsPage() {
             </button>
             
             {showFilters && (
-              <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-surface-200 py-2 z-20">
+              <div className="absolute top-full left-0 mt-2 w-64 bg-surface-100 rounded-xl shadow-xl shadow-black/30 border border-surface-200/50 py-2 z-20">
                 {categories.map((category) => (
                   <button
                     key={category}
@@ -246,7 +256,7 @@ export function JobsPage() {
           <select
             value={selectedBudget}
             onChange={(e) => setSelectedBudget(Number(e.target.value))}
-            className="px-4 py-2 bg-white border border-surface-200 rounded-xl hover:border-surface-300 transition-colors text-sm"
+            className="px-4 py-2 bg-surface-100/80 border border-surface-200/50 rounded-xl hover:border-surface-300 transition-colors text-sm text-surface-800"
           >
             {budgetRanges.map((range, index) => (
               <option key={range.label} value={index}>{range.label}</option>

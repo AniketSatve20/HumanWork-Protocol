@@ -13,7 +13,7 @@ import "./UserRegistry.t.sol";
 
 /**
  * @title Integration Test
- * @notice End-to-end workflow tests for HumanWork Protocol V5
+ * @notice End-to-end workflow tests for HumanWork Protocol V6
  */
 contract IntegrationTest is Test {
     UserRegistry public userRegistry;
@@ -38,7 +38,6 @@ contract IntegrationTest is Test {
         zkVerifier = new MockZKVerifier();
         usdc = new MockUSDC();
 
-        // Deploy all contracts
         userRegistry = new UserRegistry(address(zkVerifier), address(usdc), gasSponsor);
         agencyRegistry = new AgencyRegistry(address(usdc), address(userRegistry));
 
@@ -53,61 +52,51 @@ contract IntegrationTest is Test {
         projectEscrow =
             new ProjectEscrow(address(usdc), address(userRegistry), address(agencyRegistry), address(enterpriseAccess));
 
-        // Set permissions
         agencyRegistry.setAiOracle(address(aiOracle));
         userRegistry.setAuthorizedCaller(address(projectEscrow), true);
         userRegistry.setAuthorizedCaller(address(skillTrial), true);
         projectEscrow.setDisputeJuryAddress(address(disputeJury));
         disputeJury.setProjectEscrowAddress(address(projectEscrow));
 
-        // Fund accounts
         usdc.mint(agency, 10000 * 10 ** 6);
         usdc.mint(freelancer, 1000 * 10 ** 6);
-        usdc.mint(client, 20000 * 10 ** 6);
+        usdc.mint(client, 50000 * 10 ** 6);
     }
 
     function testCompleteB2BWorkflow() public {
         // 1. Agency registers
         vm.prank(agency);
         usdc.approve(address(agencyRegistry), 500 * 10 ** 6);
-
         bytes32 gstHash = keccak256(abi.encodePacked("GST123"));
-
         vm.prank(agency);
         uint256 agencyId = agencyRegistry.registerAgency("TechCorp", gstHash);
 
         // 2. Freelancer becomes verified human
         vm.prank(freelancer);
         userRegistry.registerBasic();
-
         bytes memory zkProof = abi.encodePacked("freelancer_proof");
         uint256[] memory signals = new uint256[](1);
         signals[0] = 1;
-
         vm.prank(freelancer);
         userRegistry.verifyHuman(zkProof, signals);
 
         // 3. Agency adds freelancer to team
         vm.prank(agency);
         agencyRegistry.addTeamMember(freelancer);
-
         assertTrue(agencyRegistry.isTeamMember(agencyId, freelancer));
 
         // 4. Client subscribes to enterprise
         vm.prank(client);
         usdc.approve(address(enterpriseAccess), 5000 * 10 ** 6);
-
         vm.prank(client);
         enterpriseAccess.subscribe(EnterpriseAccess.Tier.ClientAnnual, "ClientCo");
-
         assertTrue(enterpriseAccess.isEnterpriseUser(client));
 
-        // 5. Client creates project
+        // 5. Client creates project (NO freelancer address needed!)
         uint256[] memory amounts = new uint256[](3);
         amounts[0] = 2000 * 10 ** 6;
         amounts[1] = 3000 * 10 ** 6;
         amounts[2] = 4000 * 10 ** 6;
-
         string[] memory descriptions = new string[](3);
         descriptions[0] = "Design phase";
         descriptions[1] = "Development phase";
@@ -115,21 +104,36 @@ contract IntegrationTest is Test {
 
         vm.prank(client);
         usdc.approve(address(projectEscrow), 9000 * 10 ** 6);
-
         vm.prank(client);
-        uint256 projectId = projectEscrow.createProject(freelancer, amounts, descriptions);
+        uint256 projectId = projectEscrow.createProject(amounts, descriptions, "ipfs://project-brief");
 
-        // 6. Freelancer completes and gets approved for milestone 1
+        // 6. Project is Open, no freelancer yet
+        ProjectEscrow.Project memory proj = projectEscrow.getProject(projectId);
+        assertEq(uint256(proj.status), uint256(ProjectEscrow.ProjectStatus.Open));
+        assertEq(proj.freelancer, address(0));
+
+        // 7. Client assigns freelancer after reviewing applications
+        vm.prank(client);
+        projectEscrow.assignFreelancer(projectId, freelancer);
+
+        proj = projectEscrow.getProject(projectId);
+        assertEq(uint256(proj.status), uint256(ProjectEscrow.ProjectStatus.Active));
+        assertEq(proj.freelancer, freelancer);
+
+        // 8. Freelancer completes and gets approved for milestone 1
         vm.prank(freelancer);
         projectEscrow.completeMilestone(projectId, 0);
 
         uint256 freelancerBalanceBefore = usdc.balanceOf(freelancer);
-
         vm.prank(client);
         projectEscrow.approveMilestone(projectId, 0);
 
         uint256 freelancerBalanceAfter = usdc.balanceOf(freelancer);
-        assertEq(freelancerBalanceAfter - freelancerBalanceBefore, 2000 * 10 ** 6);
+        // 2000 USDC minus 2.5% fee = 1950 USDC
+        assertEq(freelancerBalanceAfter - freelancerBalanceBefore, 1950 * 10 ** 6);
+
+        // 9. Platform collected fees
+        assertEq(projectEscrow.accumulatedFees(), 50 * 10 ** 6);
     }
 
     function testSkillTrialToProjectWorkflow() public {
@@ -137,7 +141,7 @@ contract IntegrationTest is Test {
         vm.prank(freelancer);
         userRegistry.registerBasic();
 
-        // 2. Backend creates a skill test
+        // 2. Backend creates skill test
         skillTrial.transferOwnership(backendServer);
         vm.prank(backendServer);
         skillTrial.createTest(
@@ -147,28 +151,25 @@ contract IntegrationTest is Test {
         // 3. Freelancer takes the test
         vm.prank(freelancer);
         usdc.approve(address(skillTrial), 10 * 10 ** 6);
-
         vm.prank(freelancer);
         uint256 submissionId = skillTrial.submitTrial(0, "ipfs://my-submission");
 
-        // 4. AI grades the submission (via backend)
+        // 4. AI grades the submission
         vm.prank(backendServer);
-        aiOracle.fulfillSkillGrade(
-            submissionId, submissionId, freelancer, 92, "Excellent understanding of Solidity patterns"
-        );
+        aiOracle.fulfillSkillGrade(submissionId, submissionId, freelancer, 92, "Excellent Solidity patterns");
 
-        // 5. Check freelancer got the badge
+        // 5. Check badge
         assertEq(skillTrial.balanceOf(freelancer), 1);
         assertEq(userRegistry.getPositiveAttestationCount(freelancer), 1);
 
-        // 6. Freelancer verifies as human
+        // 6. Verify human
         bytes memory zkProof = abi.encodePacked("proof");
         uint256[] memory signals = new uint256[](1);
         signals[0] = 1;
         vm.prank(freelancer);
         userRegistry.verifyHuman(zkProof, signals);
 
-        // 7. Client subscribes and creates project
+        // 7. Client creates project, assigns freelancer
         vm.prank(client);
         usdc.approve(address(enterpriseAccess), 5000 * 10 ** 6);
         vm.prank(client);
@@ -182,16 +183,17 @@ contract IntegrationTest is Test {
         vm.prank(client);
         usdc.approve(address(projectEscrow), 5000 * 10 ** 6);
         vm.prank(client);
-        uint256 projectId = projectEscrow.createProject(freelancer, amounts, descriptions);
+        uint256 projectId = projectEscrow.createProject(amounts, descriptions, "ipfs://brief");
+        vm.prank(client);
+        projectEscrow.assignFreelancer(projectId, freelancer);
 
         // 8. Complete the project
         vm.prank(freelancer);
         projectEscrow.completeMilestone(projectId, 0);
-
         vm.prank(client);
         projectEscrow.approveMilestone(projectId, 0);
 
-        // 9. Check attestations increased
+        // 9. Check attestations (1 badge + 1 project)
         assertEq(userRegistry.getPositiveAttestationCount(freelancer), 2);
     }
 }

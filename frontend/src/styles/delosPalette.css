@@ -1,0 +1,20 @@
+/* Delos Narrative Palette CSS Variables */
+:root {
+  --color-obsidian: #1A1A1B;
+  --color-bone: #F5F5F5;
+  --color-delos-grey: #83858D;
+  --color-host-orange: #FA831B;
+  --color-narrative-crimson: #8B0000;
+  --color-sublime-teal: #007A7A;
+  --border-width-thin: 0.5px;
+  --font-heading: 'Merriweather', serif;
+  --font-mono: 'Fira Mono', monospace;
+}
+
+h1, h2 {
+  font-family: var(--font-heading);
+}
+
+.code, .address, .technical {
+  font-family: var(--font-mono);
+}

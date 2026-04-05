@@ -8,9 +8,9 @@ import "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 import "./AgencyRegistry.sol";
 
 /**
- * @title EnterpriseAccess V5
- * @notice Dual-Sided SaaS NFT Subscription
- * @dev Sells Client NFTs and Agency NFTs
+ * @title EnterpriseAccess V6
+ * @notice Dual-Sided SaaS NFT Subscription with expiry checks
+ * @dev Sells Client NFTs and Agency NFTs, checks subscription expiry
  */
 contract EnterpriseAccess is ERC721, Ownable, ReentrancyGuard {
     // ============ State Variables ============
@@ -167,18 +167,25 @@ contract EnterpriseAccess is ERC721, Ownable, ReentrancyGuard {
         emit ManagerRemoved(subscriptionId, manager);
     }
 
-    // ============ V5 INTEGRATION FUNCTIONS ============
+    // ============ V6 INTEGRATION FUNCTIONS ============
 
-    function recordProjectCreated(address user, uint256 projectValue) external {
-        // Stub for analytics - validates enterprise user
-        bytes32(projectValue); // Suppress unused variable warning
-        require(enterpriseUsers[user], "Not enterprise user");
+    function recordProjectCreated(address user, uint256 /* projectValue */) external view {
+        require(isEnterpriseUser(user), "Not enterprise user");
     }
 
     // ============ View Functions ============
 
-    function isEnterpriseUser(address user) external view returns (bool) {
-        return enterpriseUsers[user];
+    /// @notice Check if user has an active (non-expired) enterprise subscription
+    function isEnterpriseUser(address user) public view returns (bool) {
+        if (!enterpriseUsers[user]) return false;
+        // Check if user is an admin with an active subscription
+        uint256 subId = adminToSubscription[user];
+        if (subId != 0) {
+            return subscriptions[subId].expiryTime > block.timestamp;
+        }
+        // User is a manager - check their admin's subscription
+        // For managers, we trust the enterpriseUsers flag since removeManager clears it
+        return true;
     }
 
     function isAgencySubscriber(address user) external view returns (bool) {

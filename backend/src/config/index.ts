@@ -1,10 +1,35 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+// ── Security: fail-fast on missing critical secrets in production ──
+const nodeEnv = process.env.NODE_ENV || 'development';
+const jwtSecret = process.env.JWT_SECRET || 'unsafe-default-secret-change-in-production';
+const encryptionKey = process.env.ENCRYPTION_KEY || '12345678901234567890123456789012';
+const defaultCorsOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
+const corsOrigins = (process.env.CORS_ORIGIN || defaultCorsOrigins.join(','))
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+if (nodeEnv === 'production') {
+  if (jwtSecret === 'unsafe-default-secret-change-in-production') {
+    console.error('FATAL: JWT_SECRET must be set in production. Exiting.');
+    process.exit(1);
+  }
+  if (encryptionKey === '12345678901234567890123456789012') {
+    console.error('FATAL: ENCRYPTION_KEY must be set in production. Exiting.');
+    process.exit(1);
+  }
+  if (encryptionKey.length !== 32) {
+    console.error('FATAL: ENCRYPTION_KEY must be exactly 32 characters for AES-256. Exiting.');
+    process.exit(1);
+  }
+}
+
 export const config = {
   port: parseInt(process.env.PORT || '3001'),
-  nodeEnv: process.env.NODE_ENV || 'development',
-  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  nodeEnv,
+  corsOrigin: corsOrigins,
   hedera: {
     rpcUrl: process.env.HEDERA_RPC_URL || 'https://testnet.hashio.io/api',
     chainId: parseInt(process.env.HEDERA_CHAIN_ID || '296'),
@@ -39,11 +64,12 @@ export const config = {
     model: process.env.HUGGINGFACE_MODEL || 'mistralai/Mistral-7B-Instruct-v0.2',
   },
   jwt: {
-    secret: process.env.JWT_SECRET || 'unsafe-default-secret-change-in-production',
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    secret: jwtSecret,
+    expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+    algorithm: 'HS256' as const,
   },
   encryption: {
-    key: process.env.ENCRYPTION_KEY || '12345678901234567890123456789012',
+    key: encryptionKey,
     algorithm: 'aes-256-cbc',
   },
   polling: {

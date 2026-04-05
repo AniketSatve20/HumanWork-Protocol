@@ -11,10 +11,58 @@ export interface User {
   bio?: string;
   skills?: string[];
   company?: string;
+  companyDetails?: CompanyDetails;
   isVerifiedHuman: boolean;
+  isVerifiedCompany?: boolean;
   level: number;
+  verifiedSkillBadges?: number;
   createdAt: string;
 }
+
+// Company Verification (Recruiter)
+export interface CompanyDetails {
+  companyName: string;
+  registrationNumber: string;
+  industry: string;
+  website?: string;
+  country: string;
+  employeeCount?: string;
+  description?: string;
+  verificationStatus: 'pending' | 'verified' | 'rejected';
+  submittedAt?: string;
+  verifiedAt?: string;
+}
+
+// Skill System Types
+export type SkillCategory = 
+  | 'smart-contracts'
+  | 'frontend'
+  | 'backend'
+  | 'design'
+  | 'devops'
+  | 'data-science'
+  | 'mobile'
+  | 'security';
+
+export type SkillDifficulty = 'beginner' | 'intermediate' | 'advanced' | 'expert';
+
+export const SKILL_CATEGORIES: { id: SkillCategory; label: string; icon: string; color: string }[] = [
+  { id: 'smart-contracts', label: 'Smart Contracts', icon: '⛓️', color: 'text-purple-500' },
+  { id: 'frontend', label: 'Frontend', icon: '🎨', color: 'text-blue-500' },
+  { id: 'backend', label: 'Backend', icon: '⚙️', color: 'text-green-500' },
+  { id: 'design', label: 'UI/UX Design', icon: '🖌️', color: 'text-pink-500' },
+  { id: 'devops', label: 'DevOps', icon: '🚀', color: 'text-orange-500' },
+  { id: 'data-science', label: 'Data Science', icon: '📊', color: 'text-cyan-500' },
+  { id: 'mobile', label: 'Mobile', icon: '📱', color: 'text-indigo-500' },
+  { id: 'security', label: 'Security', icon: '🔒', color: 'text-red-500' },
+];
+
+export const SKILL_DIFFICULTY_CONFIG: Record<SkillDifficulty, { label: string; color: string; bgColor: string; borderColor: string }> = {
+  beginner: { label: 'Beginner', color: 'text-green-500', bgColor: 'bg-green-500/10', borderColor: 'border-green-500/20' },
+  intermediate: { label: 'Intermediate', color: 'text-blue-500', bgColor: 'bg-blue-500/10', borderColor: 'border-blue-500/20' },
+  advanced: { label: 'Advanced', color: 'text-orange-500', bgColor: 'bg-orange-500/10', borderColor: 'border-orange-500/20' },
+  expert: { label: 'Expert', color: 'text-red-500', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/20' },
+};
 
 export interface AuthState {
   user: User | null;
@@ -149,6 +197,8 @@ export interface ContractAddresses {
   projectEscrow: string;
   disputeJury: string;
   enterpriseAccess: string;
+  gasSponsor: string;
+  insurancePool: string;
 }
 
 // API Response Types

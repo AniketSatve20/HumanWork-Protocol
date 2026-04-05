@@ -51,6 +51,9 @@ export interface IUser extends Document {
   lastSyncedBlock: number;
 
   walletAddressLower: string;
+
+  // Host Integrity/Delos Diagnostics
+  narrativeState?: string; // e.g. 'Integrity Confirmed', 'Review Required', etc.
 }
 
 // ============ Schema ============
@@ -101,10 +104,15 @@ const UserSchema = new Schema<IUser>(
 
     lastSyncedBlock: { type: Number, default: 0 },
 
-    walletAddressLower: { type: String, index: true },
+    walletAddressLower: { type: String, index: true, select: false },
+
+    // Host Integrity/Delos Diagnostics
+    narrativeState: { type: String, default: 'Unverified', index: true },
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true, versionKey: false },
+    toObject: { virtuals: true, versionKey: false },
   }
 );
 
@@ -115,8 +123,18 @@ UserSchema.pre('save', function (next) {
   next();
 });
 
+// ── Virtuals ──────────────────────────────────────────────────────────────────
+
+UserSchema.virtual('completionRate').get(function (this: IUser) {
+  if (!this.totalProjects || this.totalProjects === 0) return 0;
+  return Math.round((this.completedProjects / this.totalProjects) * 100);
+});
+
+UserSchema.virtual('isVerified').get(function (this: IUser) {
+  return this.level >= LegitimacyLevel.VerifiedHuman;
+});
+
 UserSchema.index({ skills: 1, level: 1 });
-UserSchema.index({ walletAddressLower: 1 });
 
 export const User = mongoose.model<IUser>('User', UserSchema);
 

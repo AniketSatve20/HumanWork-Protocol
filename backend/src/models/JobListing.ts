@@ -56,7 +56,7 @@ const JobListingSchema = new Schema<IJobListing>(
   {
     jobId: { type: Number, required: true, unique: true, index: true },
     clientAddress: { type: String, required: true, index: true },
-    clientAddressLower: { type: String, index: true },
+    clientAddressLower: { type: String, index: true, select: false },
     title: { type: String, required: true },
     description: { type: String, required: true },
     category: { type: String, index: true },
@@ -70,7 +70,10 @@ const JobListingSchema = new Schema<IJobListing>(
     onChainProjectId: { type: Number },
     ipfsHash: { type: String },
   },
-  { timestamps: true }
+  { timestamps: true,
+    toJSON: { virtuals: true, versionKey: false },
+    toObject: { virtuals: true, versionKey: false },
+  }
 );
 
 JobListingSchema.pre('save', function (next) {

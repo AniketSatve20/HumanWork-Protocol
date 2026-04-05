@@ -7,6 +7,11 @@ import ProjectEscrowABI from '../abi/ProjectEscrow.json' with { type: 'json' };
 import UserRegistryABI from '../abi/UserRegistry.json' with { type: 'json' };
 import AIOracleABI from '../abi/AIOracle.json' with { type: 'json' };
 import SkillTrialABI from '../abi/SkillTrial.json' with { type: 'json' };
+import DisputeJuryABI from '../abi/DisputeJury.json' with { type: 'json' };
+import InsurancePoolABI from '../abi/InsurancePool.json' with { type: 'json' };
+import GasSponsorABI from '../abi/GasSponsor.json' with { type: 'json' };
+import AgencyRegistryABI from '../abi/AgencyRegistry.json' with { type: 'json' };
+import EnterpriseAccessABI from '../abi/EnterpriseAccess.json' with { type: 'json' };
 
 export class BlockchainService {
   private provider: ethers.JsonRpcProvider;
@@ -16,9 +21,16 @@ export class BlockchainService {
   public userRegistry: Contract | null = null;
   public aiOracle: Contract | null = null;
   public skillTrial: Contract | null = null;
+  public disputeJury: Contract | null = null;
+  public insurancePool: Contract | null = null;
+  public gasSponsor: Contract | null = null;
+  public agencyRegistry: Contract | null = null;
+  public enterpriseAccess: Contract | null = null;
 
   constructor() {
-    this.provider = new ethers.JsonRpcProvider(config.hedera.rpcUrl);
+    this.provider = new ethers.JsonRpcProvider(config.hedera.rpcUrl, undefined, {
+      batchMaxCount: 1,
+    });
     
     if (config.oracle.privateKey) {
       this.wallet = new ethers.Wallet(config.oracle.privateKey, this.provider);
@@ -27,43 +39,25 @@ export class BlockchainService {
     this.initContracts();
   }
 
+  private loadContract(address: string | undefined, abi: any, label: string, useSigner = false): Contract | null {
+    if (!address) return null;
+    const signerOrProvider = useSigner && this.wallet ? this.wallet : this.provider;
+    const contract = new ethers.Contract(address, abi, signerOrProvider);
+    logger.info(`✅ ${label} loaded: ${address}`);
+    return contract;
+  }
+
   private initContracts() {
     try {
-      if (config.contracts.projectEscrow) {
-        this.projectEscrow = new ethers.Contract(
-          config.contracts.projectEscrow, 
-          ProjectEscrowABI, 
-          this.provider
-        );
-        logger.info(`✅ ProjectEscrow loaded: ${config.contracts.projectEscrow}`);
-      }
-      
-      if (config.contracts.userRegistry) {
-        this.userRegistry = new ethers.Contract(
-          config.contracts.userRegistry, 
-          UserRegistryABI, 
-          this.provider
-        );
-        logger.info(`✅ UserRegistry loaded: ${config.contracts.userRegistry}`);
-      }
-      
-      if (config.contracts.aiOracle && this.wallet) {
-        this.aiOracle = new ethers.Contract(
-          config.contracts.aiOracle, 
-          AIOracleABI, 
-          this.wallet
-        );
-        logger.info(`✅ AIOracle loaded: ${config.contracts.aiOracle}`);
-      }
-      
-      if (config.contracts.skillTrial) {
-        this.skillTrial = new ethers.Contract(
-          config.contracts.skillTrial, 
-          SkillTrialABI, 
-          this.provider
-        );
-        logger.info(`✅ SkillTrial loaded: ${config.contracts.skillTrial}`);
-      }
+      this.projectEscrow = this.loadContract(config.contracts.projectEscrow, ProjectEscrowABI, 'ProjectEscrow');
+      this.userRegistry = this.loadContract(config.contracts.userRegistry, UserRegistryABI, 'UserRegistry');
+      this.aiOracle = this.loadContract(config.contracts.aiOracle, AIOracleABI, 'AIOracle', true);
+      this.skillTrial = this.loadContract(config.contracts.skillTrial, SkillTrialABI, 'SkillTrial');
+      this.disputeJury = this.loadContract(config.contracts.disputeJury, DisputeJuryABI, 'DisputeJury', true);
+      this.insurancePool = this.loadContract(config.contracts.insurancePool, InsurancePoolABI, 'InsurancePool');
+      this.gasSponsor = this.loadContract(config.contracts.gasSponsor, GasSponsorABI, 'GasSponsor');
+      this.agencyRegistry = this.loadContract(config.contracts.agencyRegistry, AgencyRegistryABI, 'AgencyRegistry');
+      this.enterpriseAccess = this.loadContract(config.contracts.enterpriseAccess, EnterpriseAccessABI, 'EnterpriseAccess');
     } catch (e) {
       logger.error('Failed to load contracts:', e);
     }
@@ -158,6 +152,115 @@ export class BlockchainService {
 
   getWallet() {
     return this.wallet;
+  }
+
+  // ── DisputeJury helpers ───────────────────────────────────────────────────
+  async getDispute(disputeId: number) {
+    if (!this.disputeJury) throw new Error('DisputeJury contract not initialized');
+    const d = await this.disputeJury.getDispute(disputeId);
+    return {
+      projectId: Number(d.projectId),
+      milestoneIndex: Number(d.milestoneIndex),
+      client: d.client,
+      freelancer: d.freelancer,
+      amount: d.amount.toString(),
+      totalVotes: Number(d.totalVotes),
+      outcome: Number(d.outcome),
+      createdAt: Number(d.createdAt),
+      resolvedAt: Number(d.resolvedAt),
+      fundsDistributed: d.fundsDistributed,
+      aiReport: d.aiReport,
+      aiRecommendedSplit: Number(d.aiRecommendedSplit),
+    };
+  }
+
+  async setAiReport(disputeId: number, report: string, recommendedSplit: number) {
+    if (!this.disputeJury) throw new Error('DisputeJury contract not initialized');
+    const tx = await this.disputeJury.setAiReport(disputeId, report, recommendedSplit);
+    return tx;
+  }
+
+  // ── InsurancePool helpers ─────────────────────────────────────────────────
+  async getPoolMetrics() {
+    if (!this.insurancePool) throw new Error('InsurancePool contract not initialized');
+    const metrics = await this.insurancePool.getPoolMetrics();
+    return {
+      totalPremiums: metrics.totalPremiums?.toString() || '0',
+      totalClaims: metrics.totalClaims?.toString() || '0',
+      activePolicies: Number(metrics.activePolicies || 0),
+      poolBalance: metrics.poolBalance?.toString() || '0',
+    };
+  }
+
+  async getPolicy(policyId: number) {
+    if (!this.insurancePool) throw new Error('InsurancePool contract not initialized');
+    const p = await this.insurancePool.getPolicy(policyId);
+    return {
+      holder: p.holder,
+      projectId: Number(p.projectId),
+      coverageAmount: p.coverageAmount.toString(),
+      premium: p.premium.toString(),
+      isActive: p.isActive,
+      startTime: Number(p.startTime),
+      endTime: Number(p.endTime),
+    };
+  }
+
+  // ── GasSponsor helpers ────────────────────────────────────────────────────
+  async getUserGasBalance(address: string) {
+    if (!this.gasSponsor) throw new Error('GasSponsor contract not initialized');
+    const balance = await this.gasSponsor.getUserBalance(address);
+    return balance.toString();
+  }
+
+  async getTreasuryMetrics() {
+    if (!this.gasSponsor) throw new Error('GasSponsor contract not initialized');
+    const metrics = await this.gasSponsor.getTreasuryMetrics();
+    return {
+      totalDeposited: metrics.totalDeposited?.toString() || '0',
+      totalSpent: metrics.totalSpent?.toString() || '0',
+      userCount: Number(metrics.userCount || 0),
+    };
+  }
+
+  // ── AgencyRegistry helpers ────────────────────────────────────────────────
+  async getAgency(agencyId: number) {
+    if (!this.agencyRegistry) throw new Error('AgencyRegistry contract not initialized');
+    const a = await this.agencyRegistry.getAgency(agencyId);
+    return {
+      owner: a.owner,
+      name: a.companyName || a.name || '',
+      companyName: a.companyName || a.name || '',
+      gstNumberHash: (a.gstNumberHash || a.gstHash || ethers.ZeroHash).toString(),
+      isGstVerified: Boolean(a.isGstVerified || a.gstVerified),
+      stakeAmount: (a.stakeAmount || 0n).toString(),
+      metadataHash: a.metadataHash || '',
+      isActive: Boolean(a.isActive || a.active),
+      teamSize: Number(a.teamSize || a.memberCount || 0),
+    };
+  }
+
+  async getTeamMembers(agencyId: number) {
+    if (!this.agencyRegistry) throw new Error('AgencyRegistry contract not initialized');
+    return await this.agencyRegistry.getTeamMembers(agencyId);
+  }
+
+  // ── EnterpriseAccess helpers ──────────────────────────────────────────────
+  async isEnterpriseUser(address: string) {
+    if (!this.enterpriseAccess) throw new Error('EnterpriseAccess contract not initialized');
+    return await this.enterpriseAccess.isEnterpriseUser(address);
+  }
+
+  async getSubscription(address: string) {
+    if (!this.enterpriseAccess) throw new Error('EnterpriseAccess contract not initialized');
+    const s = await this.enterpriseAccess.getSubscription(address);
+    return {
+      isActive: s.isActive,
+      tier: Number(s.tier),
+      startTime: Number(s.startTime),
+      endTime: Number(s.endTime),
+      amount: s.amount?.toString() || '0',
+    };
   }
 }
 

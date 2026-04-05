@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import type { Conversation, Message } from '@/types';
 import { apiService } from '@/services/api.service';
+import { useNotificationStore } from '@/context/notificationStore';
+import {
+  connectSocket,
+  disconnectSocket,
+  joinConversation,
+  leaveConversation,
+} from '@/services/socket.service';
 
 interface MessagesState {
   conversations: Conversation[];
@@ -10,6 +17,7 @@ interface MessagesState {
   isSending: boolean;
   error: string | null;
   unreadCount: number;
+  socketConnected: boolean;
   
   // Actions
   fetchConversations: () => Promise<void>;
@@ -20,6 +28,10 @@ interface MessagesState {
   addMessage: (message: Message) => void;
   markAsRead: (conversationId: string) => void;
   setError: (error: string | null) => void;
+  initSocket: () => void;
+  cleanupSocket: () => void;
+  joinRoom: (conversationId: string) => void;
+  leaveRoom: (conversationId: string) => void;
 }
 
 export const useMessagesStore = create<MessagesState>((set, get) => ({
@@ -30,6 +42,72 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   isSending: false,
   error: null,
   unreadCount: 0,
+  socketConnected: false,
+
+  // ── Socket.IO Integration ────────────────────────────────────────────────
+  initSocket: () => {
+    try {
+      const socket = connectSocket();
+
+      socket.on('connect', () => {
+        set({ socketConnected: true });
+      });
+
+      socket.on('disconnect', () => {
+        set({ socketConnected: false });
+      });
+
+      // Real-time incoming message
+      socket.on('new_message', (message: Message) => {
+        const { messages, currentConversation } = get();
+
+        // Only append if we're viewing this conversation and message isn't already there
+        if (
+          currentConversation?.id === message.conversationId &&
+          !messages.some(m => m.id === message.id)
+        ) {
+          set({ messages: [...messages, message] });
+        }
+      });
+
+      // Sidebar / conversation list update
+      socket.on('conversation_updated', (payload: { conversationId: string; lastMessage: any }) => {
+        const { conversations, unreadCount } = get();
+        set({
+          conversations: conversations.map(c =>
+            c.id === payload.conversationId
+              ? { ...c, lastMessage: payload.lastMessage, unreadCount: c.unreadCount + 1 }
+              : c
+          ),
+          unreadCount: unreadCount + 1,
+        });
+
+        // Generate a notification for the new message
+        const conv = conversations.find(c => c.id === payload.conversationId);
+        useNotificationStore.getState().addNotification({
+          type: 'message',
+          title: 'New Message',
+          message: `${payload.lastMessage?.sender?.slice(0, 8)}...: ${payload.lastMessage?.content?.slice(0, 60) || 'New message'}`,
+          data: { conversationId: payload.conversationId, jobTitle: conv?.jobTitle },
+        });
+      });
+    } catch (err) {
+      console.warn('Socket init skipped — auth session is not ready yet');
+    }
+  },
+
+  cleanupSocket: () => {
+    disconnectSocket();
+    set({ socketConnected: false });
+  },
+
+  joinRoom: (conversationId: string) => {
+    joinConversation(conversationId);
+  },
+
+  leaveRoom: (conversationId: string) => {
+    leaveConversation(conversationId);
+  },
 
   fetchConversations: async () => {
     set({ isLoading: true, error: null });
@@ -169,11 +247,17 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
     const conversation = conversations.find((c) => c.id === conversationId);
     
     if (conversation) {
+      // Update local state immediately
       set({
         conversations: conversations.map((c) =>
           c.id === conversationId ? { ...c, unreadCount: 0 } : c
         ),
         unreadCount: unreadCount - conversation.unreadCount,
+      });
+
+      // Sync to server (fire-and-forget)
+      apiService.markConversationAsRead(conversationId).catch((err) => {
+        console.warn('Failed to sync markAsRead to server:', err);
       });
     }
   },

@@ -22,7 +22,7 @@ interface UploadOptions {
 }
 
 class FilecoinStorage {
-  private pinata: PinataSDK | null = null;
+  private pinata: any = null;
   private readonly gateway: string;
   private initialized: boolean = false;
 
@@ -34,7 +34,7 @@ class FilecoinStorage {
     if (this.initialized) return;
 
     if (config.pinata.apiKey && config.pinata.secretKey) {
-      this.pinata = new PinataSDK(config.pinata.apiKey, config.pinata.secretKey);
+      this.pinata = new (PinataSDK as any)(config.pinata.apiKey, config.pinata.secretKey);
       
       try {
         const result = await this.pinata.testAuthentication();

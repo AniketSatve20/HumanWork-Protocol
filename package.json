@@ -3,16 +3,35 @@
   "version": "1.0.0",
   "description": "Decentralized B2B freelancing platform with AI-powered skill verification",
   "private": true,
-  "workspaces": ["backend", "frontend"],
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
   "scripts": {
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "build": "npm run build:backend && npm run build:frontend",
     "build:contracts": "cd contracts && forge build",
     "test:contracts": "cd contracts && forge test -vvv"
   },
-  "devDependencies": { "concurrently": "^8.2.2" },
-  "engines": { "node": ">=18.0.0" },
-  "license": "MIT"
+  "devDependencies": {
+    "baseline-browser-mapping": "^2.10.0",
+    "concurrently": "^8.2.2",
+    "vite": "^5.4.21"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "mongodb": "^7.1.0"
+  },
+  "overrides": {
+    "three": "0.166.1",
+    "@types/three": "0.183.1"
+  }
 }

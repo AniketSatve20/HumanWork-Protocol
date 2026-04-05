@@ -1,0 +1,274 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      { "name": "_stablecoin", "type": "address", "internalType": "address" },
+      { "name": "_userRegistry", "type": "address", "internalType": "address" },
+      { "name": "_agencyRegistry", "type": "address", "internalType": "address" },
+      { "name": "_enterpriseAccess", "type": "address", "internalType": "address" }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "STABLECOIN",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address", "internalType": "contract IERC20" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "addMilestone",
+    "inputs": [
+      { "name": "projectId", "type": "uint256", "internalType": "uint256" },
+      { "name": "amount", "type": "uint256", "internalType": "uint256" },
+      { "name": "description", "type": "string", "internalType": "string" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "agencyRegistry",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address", "internalType": "contract AgencyRegistry" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "approveMilestone",
+    "inputs": [
+      { "name": "projectId", "type": "uint256", "internalType": "uint256" },
+      { "name": "milestoneId", "type": "uint256", "internalType": "uint256" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "clientCancel",
+    "inputs": [{ "name": "projectId", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "completeMilestone",
+    "inputs": [
+      { "name": "projectId", "type": "uint256", "internalType": "uint256" },
+      { "name": "milestoneId", "type": "uint256", "internalType": "uint256" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "createDispute",
+    "inputs": [
+      { "name": "projectId", "type": "uint256", "internalType": "uint256" },
+      { "name": "milestoneId", "type": "uint256", "internalType": "uint256" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "createProject",
+    "inputs": [
+      { "name": "freelancer", "type": "address", "internalType": "address" },
+      { "name": "milestoneAmounts", "type": "uint256[]", "internalType": "uint256[]" },
+      { "name": "milestoneDescriptions", "type": "string[]", "internalType": "string[]" }
+    ],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "disputeJuryAddress",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "enterpriseAccess",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address", "internalType": "contract EnterpriseAccess" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "freelancerCancel",
+    "inputs": [{ "name": "projectId", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "getMilestone",
+    "inputs": [
+      { "name": "projectId", "type": "uint256", "internalType": "uint256" },
+      { "name": "milestoneId", "type": "uint256", "internalType": "uint256" }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct ProjectEscrow.Milestone",
+        "components": [
+          { "name": "description", "type": "string", "internalType": "string" },
+          { "name": "amount", "type": "uint256", "internalType": "uint256" },
+          { "name": "status", "type": "uint8", "internalType": "enum ProjectEscrow.MilestoneStatus" },
+          { "name": "completionTime", "type": "uint256", "internalType": "uint256" }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getMilestoneCount",
+    "inputs": [{ "name": "projectId", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getProject",
+    "inputs": [{ "name": "projectId", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct ProjectEscrow.Project",
+        "components": [
+          { "name": "projectId", "type": "uint256", "internalType": "uint256" },
+          { "name": "client", "type": "address", "internalType": "address" },
+          { "name": "freelancer", "type": "address", "internalType": "address" },
+          { "name": "agencyId", "type": "uint256", "internalType": "uint256" },
+          { "name": "totalAmount", "type": "uint256", "internalType": "uint256" },
+          { "name": "amountPaid", "type": "uint256", "internalType": "uint256" },
+          { "name": "status", "type": "uint8", "internalType": "enum ProjectEscrow.ProjectStatus" },
+          {
+            "name": "milestones",
+            "type": "tuple[]",
+            "internalType": "struct ProjectEscrow.Milestone[]",
+            "components": [
+              { "name": "description", "type": "string", "internalType": "string" },
+              { "name": "amount", "type": "uint256", "internalType": "uint256" },
+              { "name": "status", "type": "uint8", "internalType": "enum ProjectEscrow.MilestoneStatus" },
+              { "name": "completionTime", "type": "uint256", "internalType": "uint256" }
+            ]
+          },
+          { "name": "isEnterpriseProject", "type": "bool", "internalType": "bool" }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "projectCounter",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "projects",
+    "inputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      { "name": "projectId", "type": "uint256", "internalType": "uint256" },
+      { "name": "client", "type": "address", "internalType": "address" },
+      { "name": "freelancer", "type": "address", "internalType": "address" },
+      { "name": "agencyId", "type": "uint256", "internalType": "uint256" },
+      { "name": "totalAmount", "type": "uint256", "internalType": "uint256" },
+      { "name": "amountPaid", "type": "uint256", "internalType": "uint256" },
+      { "name": "status", "type": "uint8", "internalType": "enum ProjectEscrow.ProjectStatus" },
+      { "name": "isEnterpriseProject", "type": "bool", "internalType": "bool" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setDisputeJuryAddress",
+    "inputs": [{ "name": "_juryAddress", "type": "address", "internalType": "address" }],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "userRegistry",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address", "internalType": "contract UserRegistry" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "DisputeCreated",
+    "inputs": [
+      { "name": "projectId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "milestoneId", "type": "uint256", "indexed": true, "internalType": "uint256" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MilestoneAdded",
+    "inputs": [
+      { "name": "projectId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "milestoneId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "amount", "type": "uint256", "indexed": false, "internalType": "uint256" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MilestoneApproved",
+    "inputs": [
+      { "name": "projectId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "milestoneId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "amount", "type": "uint256", "indexed": false, "internalType": "uint256" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MilestoneCompleted",
+    "inputs": [
+      { "name": "projectId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "milestoneId", "type": "uint256", "indexed": true, "internalType": "uint256" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProjectCancelled",
+    "inputs": [
+      { "name": "projectId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "cancelledBy", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "reason", "type": "string", "indexed": false, "internalType": "string" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProjectCreated",
+    "inputs": [
+      { "name": "projectId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "client", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "freelancer", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "totalAmount", "type": "uint256", "indexed": false, "internalType": "uint256" }
+    ],
+    "anonymous": false
+  },
+  { "type": "error", "name": "InvalidAmount", "inputs": [] },
+  { "type": "error", "name": "MilestoneNotCompleted", "inputs": [] },
+  { "type": "error", "name": "MilestoneNotPending", "inputs": [] },
+  { "type": "error", "name": "NotClient", "inputs": [] },
+  { "type": "error", "name": "NotClientOrFreelancer", "inputs": [] },
+  { "type": "error", "name": "NotFreelancer", "inputs": [] },
+  { "type": "error", "name": "ProjectNotActive", "inputs": [] },
+  { "type": "error", "name": "ReentrancyGuardReentrantCall", "inputs": [] },
+  { "type": "error", "name": "Unauthorized", "inputs": [] }
+]

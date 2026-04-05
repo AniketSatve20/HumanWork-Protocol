@@ -1,0 +1,66 @@
+:root {
+  --delos-bg-dark: #1A1A1B;
+  --delos-bg-light: #F5F5F5;
+  --delos-border: #83858D;
+  --delos-saffron: #FA831B;
+  --delos-heading-font: 'Bodoni Moda', 'Didot', serif;
+  --delos-mono-font: 'Fira Mono', 'JetBrains Mono', 'Menlo', monospace;
+}
+
+body {
+  background: var(--delos-bg-dark);
+  color: var(--delos-bg-light);
+  font-family: var(--delos-mono-font);
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--delos-heading-font);
+  letter-spacing: 0.08em;
+  color: var(--delos-bg-light);
+  font-weight: 600;
+}
+
+/* Card, HUD, Divider, Panel Borders */
+.delos-card, .delos-hud, .delos-divider, .delos-panel {
+  border: 0.5px solid var(--delos-border);
+  background: var(--delos-bg-dark);
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+/* Verified Status Indicator */
+.delos-verified {
+  color: var(--delos-saffron);
+  font-weight: bold;
+  letter-spacing: 0.12em;
+}
+
+/* Blockchain Data */
+.delos-mono, .delos-address, .delos-txid {
+  font-family: var(--delos-mono-font);
+  font-size: 0.98em;
+  color: var(--delos-border);
+  letter-spacing: 0.04em;
+}
+
+/* Remove all glow and thick borders */
+*:not(.delos-verified) {
+  text-shadow: none !important;
+  box-shadow: none !important;
+  border-width: 0.5px !important;
+}
+
+/* Light mode override (optional) */
+body.light-mode {
+  background: var(--delos-bg-light);
+  color: var(--delos-bg-dark);
+}
+
+body.light-mode .delos-card, body.light-mode .delos-hud, body.light-mode .delos-panel {
+  background: var(--delos-bg-light);
+  border-color: var(--delos-border);
+}
+body.light-mode h1, body.light-mode h2, body.light-mode h3, body.light-mode h4, body.light-mode h5, body.light-mode h6 {
+  color: var(--delos-bg-dark);
+}

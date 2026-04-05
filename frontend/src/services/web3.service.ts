@@ -45,6 +45,54 @@ export const SKILL_TRIAL_ABI = [
   'function balanceOf(address owner) view returns (uint256)',
 ];
 
+export const DISPUTE_JURY_ABI = [
+  'function stakeAsJuror(uint256 amount) external',
+  'function unstake(uint256 amount) external',
+  'function castVote(uint256 disputeId, uint8 choice) external',
+  'function finalizeDispute(uint256 disputeId) external',
+  'function getDispute(uint256 disputeId) view returns (tuple(uint256 projectId, uint256 milestoneIndex, address client, address freelancer, uint256 amount, uint8 status, string aiReport, uint256 recommendedClientShare, uint256 recommendedFreelancerShare, address[] selectedJurors, uint256 votingDeadline, uint256 clientVotes, uint256 freelancerVotes, uint256 acceptAIVotes, bool finalized))',
+  'function disputeCounter() view returns (uint256)',
+  'function getJurorStake(address juror) view returns (uint256)',
+  'function isActiveJuror(address juror) view returns (bool)',
+  'function getJurorReputation(address juror) view returns (uint256)',
+];
+
+export const AGENCY_REGISTRY_ABI = [
+  'function registerAgency(string memory name, bytes32 gstHash) external returns (uint256)',
+  'function addTeamMember(uint256 agencyId, address user) external',
+  'function removeTeamMember(uint256 agencyId, address user) external',
+  'function getAgency(uint256 agencyId) view returns (tuple(string name, address admin, bytes32 gstHash, bool gstVerified, bool active, uint256 memberCount, uint256 createdAt))',
+  'function getTeamMembers(uint256 agencyId) view returns (address[])',
+  'function isTeamMember(uint256 agencyId, address user) view returns (bool)',
+  'function agencyCounter() view returns (uint256)',
+];
+
+export const ENTERPRISE_ACCESS_ABI = [
+  'function subscribe(uint8 tier, string memory companyName) external',
+  'function renewSubscription() external',
+  'function addManager(address manager) external',
+  'function removeManager(address manager) external',
+  'function isEnterpriseUser(address user) view returns (bool)',
+  'function isAgencySubscriber(address user) view returns (bool)',
+  'function isSubscriptionActive(address user) view returns (bool)',
+  'function getSubscription(address user) view returns (tuple(uint8 tier, string companyName, uint256 tokenId, uint256 expiresAt, bool isAdmin, address[] managers))',
+];
+
+export const INSURANCE_POOL_ABI = [
+  'function buyInsurance(uint256 projectId, uint256 coverageAmount) external',
+  'function requestClaim(uint256 policyId, uint256 amount) external',
+  'function collectClaim(uint256 policyId, uint256 amount) external',
+  'function getPolicy(uint256 policyId) view returns (tuple(address policyholder, uint256 projectId, uint256 coverageAmount, uint256 premium, uint256 expiresAt, bool claimed, bool claimApproved, uint256 claimAmount))',
+  'function getPoolMetrics() view returns (uint256 totalPremiums, uint256 totalClaims, uint256 activePolicies, uint256 poolBalance)',
+  'function policyCounter() view returns (uint256)',
+];
+
+export const GAS_SPONSOR_ABI = [
+  'function getUserBalance(address user) view returns (uint256)',
+  'function getUserSpentGas(address user) view returns (uint256)',
+  'function getTreasuryMetrics() view returns (uint256 totalDeposits, uint256 totalSpent, uint256 balance)',
+];
+
 class Web3Service {
   private provider: BrowserProvider | null = null;
   private signer: JsonRpcSigner | null = null;
@@ -140,6 +188,46 @@ class Web3Service {
       this.contracts.skillTrial = new ethers.Contract(
         config.contracts.skillTrial,
         SKILL_TRIAL_ABI,
+        this.signer
+      );
+    }
+
+    if (config.contracts.disputeJury) {
+      this.contracts.disputeJury = new ethers.Contract(
+        config.contracts.disputeJury,
+        DISPUTE_JURY_ABI,
+        this.signer
+      );
+    }
+
+    if (config.contracts.agencyRegistry) {
+      this.contracts.agencyRegistry = new ethers.Contract(
+        config.contracts.agencyRegistry,
+        AGENCY_REGISTRY_ABI,
+        this.signer
+      );
+    }
+
+    if (config.contracts.enterpriseAccess) {
+      this.contracts.enterpriseAccess = new ethers.Contract(
+        config.contracts.enterpriseAccess,
+        ENTERPRISE_ACCESS_ABI,
+        this.signer
+      );
+    }
+
+    if (config.contracts.insurancePool) {
+      this.contracts.insurancePool = new ethers.Contract(
+        config.contracts.insurancePool,
+        INSURANCE_POOL_ABI,
+        this.signer
+      );
+    }
+
+    if (config.contracts.gasSponsor) {
+      this.contracts.gasSponsor = new ethers.Contract(
+        config.contracts.gasSponsor,
+        GAS_SPONSOR_ABI,
         this.signer
       );
     }
@@ -250,16 +338,128 @@ class Web3Service {
     return trial.getFreelancerBadges(address);
   }
 
+  async submitSkillTest(testId: number, submissionHash: string): Promise<ethers.ContractTransactionResponse> {
+    const trial = this.contracts.skillTrial;
+    if (!trial) throw new Error('SkillTrial contract not initialized');
+    return trial.submitTrial(testId, submissionHash);
+  }
+
+  // DisputeJury Methods
+  async getDispute(disputeId: number): Promise<{
+    projectId: number; milestoneIndex: number; client: string; freelancer: string;
+    amount: bigint; status: number; aiReport: string;
+    recommendedClientShare: bigint; recommendedFreelancerShare: bigint;
+    selectedJurors: string[]; votingDeadline: bigint;
+    clientVotes: number; freelancerVotes: number; acceptAIVotes: number; finalized: boolean;
+  }> {
+    const jury = this.contracts.disputeJury;
+    if (!jury) throw new Error('DisputeJury contract not initialized');
+    const d = await jury.getDispute(disputeId);
+    return {
+      projectId: Number(d.projectId), milestoneIndex: Number(d.milestoneIndex),
+      client: d.client, freelancer: d.freelancer, amount: d.amount,
+      status: Number(d.status), aiReport: d.aiReport,
+      recommendedClientShare: d.recommendedClientShare,
+      recommendedFreelancerShare: d.recommendedFreelancerShare,
+      selectedJurors: d.selectedJurors, votingDeadline: d.votingDeadline,
+      clientVotes: Number(d.clientVotes), freelancerVotes: Number(d.freelancerVotes),
+      acceptAIVotes: Number(d.acceptAIVotes), finalized: d.finalized,
+    };
+  }
+
+  async getDisputeCount(): Promise<number> {
+    const jury = this.contracts.disputeJury;
+    if (!jury) throw new Error('DisputeJury contract not initialized');
+    return Number(await jury.disputeCounter());
+  }
+
+  async castVote(disputeId: number, choice: number): Promise<ethers.ContractTransactionResponse> {
+    const jury = this.contracts.disputeJury;
+    if (!jury) throw new Error('DisputeJury contract not initialized');
+    return jury.castVote(disputeId, choice);
+  }
+
+  async stakeAsJuror(amount: bigint): Promise<ethers.ContractTransactionResponse> {
+    const jury = this.contracts.disputeJury;
+    if (!jury) throw new Error('DisputeJury contract not initialized');
+    return jury.stakeAsJuror(amount);
+  }
+
+  async getJurorStake(address: string): Promise<bigint> {
+    const jury = this.contracts.disputeJury;
+    if (!jury) throw new Error('DisputeJury contract not initialized');
+    return jury.getJurorStake(address);
+  }
+
+  async isActiveJuror(address: string): Promise<boolean> {
+    const jury = this.contracts.disputeJury;
+    if (!jury) throw new Error('DisputeJury contract not initialized');
+    return jury.isActiveJuror(address);
+  }
+
+  // Agency Registry Methods
+  async registerAgency(name: string, gstHash: string): Promise<ethers.ContractTransactionResponse> {
+    const agency = this.contracts.agencyRegistry;
+    if (!agency) throw new Error('AgencyRegistry contract not initialized');
+    return agency.registerAgency(name, gstHash);
+  }
+
+  async getAgency(agencyId: number): Promise<unknown> {
+    const agency = this.contracts.agencyRegistry;
+    if (!agency) throw new Error('AgencyRegistry contract not initialized');
+    return agency.getAgency(agencyId);
+  }
+
+  // Enterprise Access Methods
+  async isEnterpriseUser(address: string): Promise<boolean> {
+    const enterprise = this.contracts.enterpriseAccess;
+    if (!enterprise) throw new Error('EnterpriseAccess contract not initialized');
+    return enterprise.isEnterpriseUser(address);
+  }
+
+  async getSubscription(address: string): Promise<unknown> {
+    const enterprise = this.contracts.enterpriseAccess;
+    if (!enterprise) throw new Error('EnterpriseAccess contract not initialized');
+    return enterprise.getSubscription(address);
+  }
+
+  // Insurance Pool Methods
+  async buyInsurance(projectId: number, coverageAmount: bigint): Promise<ethers.ContractTransactionResponse> {
+    const insurance = this.contracts.insurancePool;
+    if (!insurance) throw new Error('InsurancePool contract not initialized');
+    return insurance.buyInsurance(projectId, coverageAmount);
+  }
+
+  async getInsurancePolicy(policyId: number): Promise<unknown> {
+    const insurance = this.contracts.insurancePool;
+    if (!insurance) throw new Error('InsurancePool contract not initialized');
+    return insurance.getPolicy(policyId);
+  }
+
+  async getPoolMetrics(): Promise<{ totalPremiums: bigint; totalClaims: bigint; activePolicies: bigint; poolBalance: bigint }> {
+    const insurance = this.contracts.insurancePool;
+    if (!insurance) throw new Error('InsurancePool contract not initialized');
+    const [totalPremiums, totalClaims, activePolicies, poolBalance] = await insurance.getPoolMetrics();
+    return { totalPremiums, totalClaims, activePolicies, poolBalance };
+  }
+
+  // Gas Sponsor Methods
+  async getGasSponsorBalance(address: string): Promise<bigint> {
+    const gas = this.contracts.gasSponsor;
+    if (!gas) throw new Error('GasSponsor contract not initialized');
+    return gas.getUserBalance(address);
+  }
+
   // Event listener setup
   onAccountsChanged(callback: (accounts: string[]) => void): void {
     if (window.ethereum) {
-      window.ethereum.on('accountsChanged', callback);
+      window.ethereum.on('accountsChanged', callback as (...args: unknown[]) => void);
     }
   }
 
   onChainChanged(callback: (chainId: string) => void): void {
     if (window.ethereum) {
-      window.ethereum.on('chainChanged', callback);
+      window.ethereum.on('chainChanged', callback as (...args: unknown[]) => void);
     }
   }
 

@@ -46,6 +46,11 @@ export interface ISkillSubmission extends Document {
   applicantLower: string;
 }
 
+interface ISkillSubmissionCounter extends Document {
+  name: string;
+  seq: number;
+}
+
 // ============ Schema ============
 
 const GradingDetailsSchema = new Schema(
@@ -89,10 +94,12 @@ const SkillSubmissionSchema = new Schema<ISkillSubmission>(
     transactionHash: { type: String, required: true, index: true },
     blockNumber: { type: Number, required: true, index: true },
 
-    applicantLower: { type: String, index: true },
+    applicantLower: { type: String, index: true, select: false },
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true, versionKey: false },
+    toObject: { virtuals: true, versionKey: false },
   }
 );
 
@@ -105,6 +112,41 @@ SkillSubmissionSchema.pre('save', function (next) {
 
 SkillSubmissionSchema.index({ applicantLower: 1, status: 1 });
 SkillSubmissionSchema.index({ testId: 1, status: 1 });
+
+const SkillSubmissionCounterSchema = new Schema<ISkillSubmissionCounter>(
+  {
+    name: { type: String, required: true, unique: true },
+    seq: { type: Number, default: 0 },
+  },
+  {
+    versionKey: false,
+  }
+);
+
+const SkillSubmissionCounter = mongoose.model<ISkillSubmissionCounter>(
+  'SkillSubmissionCounter',
+  SkillSubmissionCounterSchema
+);
+
+/**
+ * Generate a unique temporary submission ID from a monotonic counter.
+ *
+ * Negative IDs are reserved for local pending records so they never collide
+ * with on-chain uint256 submission IDs (which are non-negative).
+ */
+export async function getNextTemporarySubmissionId(): Promise<number> {
+  const counter = await SkillSubmissionCounter.findOneAndUpdate(
+    { name: 'skillSubmissionTempId' },
+    { $inc: { seq: 1 } },
+    { upsert: true, new: true }
+  );
+
+  if (!counter) {
+    throw new Error('Failed to allocate temporary skill submission ID');
+  }
+
+  return -Math.abs(counter.seq);
+}
 
 export const SkillSubmission = mongoose.model<ISkillSubmission>('SkillSubmission', SkillSubmissionSchema);
 

@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { normalizeAmountString, type AmountString } from '../utils/money.js';
 
 // ============ Enums matching Solidity ============
 
@@ -10,9 +11,10 @@ export enum MilestoneStatus {
 }
 
 export enum ProjectStatus {
-  Active = 0,
-  Completed = 1,
-  Cancelled = 2,
+  Open = 0,
+  Active = 1,
+  Completed = 2,
+  Cancelled = 3,
 }
 
 // ============ Interfaces ============
@@ -20,7 +22,7 @@ export enum ProjectStatus {
 export interface IMilestone {
   index: number;
   description: string;
-  amount: string;
+  amount: AmountString;
   status: MilestoneStatus;
   completionTime?: Date;
   deliverableIpfsHash?: string;
@@ -31,8 +33,8 @@ export interface IProject extends Document {
   client: string;
   freelancer: string;
   agencyId: number;
-  totalAmount: string;
-  amountPaid: string;
+  totalAmount: AmountString;
+  amountPaid: AmountString;
   status: ProjectStatus;
   milestones: IMilestone[];
   isEnterpriseProject: boolean;
@@ -75,7 +77,7 @@ const ProjectSchema = new Schema<IProject>(
   {
     projectId: { type: Number, required: true, unique: true, index: true },
     client: { type: String, required: true, index: true },
-    freelancer: { type: String, required: true, index: true },
+    freelancer: { type: String, default: '', index: true },
     agencyId: { type: Number, default: 0 },
     totalAmount: { type: String, required: true },
     amountPaid: { type: String, default: '0' },
@@ -98,22 +100,55 @@ const ProjectSchema = new Schema<IProject>(
     transactionHash: { type: String, required: true, index: true },
     blockNumber: { type: Number, required: true, index: true },
 
-    clientLower: { type: String, index: true },
-    freelancerLower: { type: String, index: true },
+    clientLower: { type: String, index: true, select: false },
+    freelancerLower: { type: String, index: true, select: false },
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true, versionKey: false },
+    toObject: { virtuals: true, versionKey: false },
   }
 );
 
 ProjectSchema.pre('save', function (next) {
-  if (this.client) {
-    this.clientLower = this.client.toLowerCase();
+  try {
+    if (this.client) {
+      this.clientLower = this.client.toLowerCase();
+    }
+    if (this.freelancer) {
+      this.freelancerLower = this.freelancer.toLowerCase();
+    }
+
+    this.totalAmount = normalizeAmountString(this.totalAmount, 'totalAmount');
+    this.amountPaid = normalizeAmountString(this.amountPaid, 'amountPaid');
+
+    if (Array.isArray(this.milestones)) {
+      this.milestones.forEach((milestone, idx) => {
+        milestone.amount = normalizeAmountString(milestone.amount, `milestones[${idx}].amount`);
+      });
+    }
+
+    next();
+  } catch (error) {
+    next(error as Error);
   }
-  if (this.freelancer) {
-    this.freelancerLower = this.freelancer.toLowerCase();
-  }
-  next();
+});
+
+// ── Virtuals ──────────────────────────────────────────────────────────────────
+
+ProjectSchema.virtual('progress').get(function (this: IProject) {
+  if (!this.milestones || this.milestones.length === 0) return 0;
+  const approved = this.milestones.filter((m) => m.status === MilestoneStatus.Approved).length;
+  return Math.round((approved / this.milestones.length) * 100);
+});
+
+ProjectSchema.virtual('completedMilestones').get(function (this: IProject) {
+  if (!this.milestones) return 0;
+  return this.milestones.filter((m) => m.status === MilestoneStatus.Approved).length;
+});
+
+ProjectSchema.virtual('isComplete').get(function (this: IProject) {
+  return this.status === ProjectStatus.Completed;
 });
 
 ProjectSchema.index({ clientLower: 1, status: 1 });

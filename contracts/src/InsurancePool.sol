@@ -2,19 +2,31 @@
 pragma solidity ^0.8.20;
 
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-contracts/contracts/access/Ownable.sol";
+import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import "openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 
-contract InsurancePool is Ownable, ReentrancyGuard {
+/**
+ * @title InsurancePool V6
+ * @notice Project insurance with premium-based coverage and claim validation
+ * @dev policyCounter starts at 1 to avoid zero-ID mapping collision
+ */
+contract InsurancePool is AccessControl, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
+    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+    bytes32 public constant CLAIM_VALIDATOR_ROLE = keccak256("CLAIM_VALIDATOR_ROLE");
+
     IERC20 public immutable stablecoin;
 
     uint256 public constant PREMIUM_PERCENTAGE = 5;
-    uint256 public constant COVERAGE_PERCENTAGE = 100;
     uint256 public constant POLICY_DURATION = 90 days;
 
-    uint256 public policyCounter;
+    /// @notice Starts at 1 to avoid zero-ID collision with default mapping values
+    uint256 public policyCounter = 1;
     uint256 public totalPremiumsCollected;
     uint256 public totalClaimsPaid;
+    uint256 public reserveRequirement; // Tracked reserve for active policies
 
     enum PolicyStatus {
         Active,
@@ -30,21 +42,19 @@ contract InsurancePool is Ownable, ReentrancyGuard {
         uint256 startTime;
         uint256 expiryTime;
         PolicyStatus status;
+        bool claimApproved; // Must be approved by validator before payout
     }
 
     mapping(uint256 => InsurancePolicy) public policies;
     mapping(uint256 => uint256) public projectToPolicy;
     mapping(address => uint256[]) public userPolicies;
 
-    event InsurancePurchased(
-        uint256 indexed policyId,
-        address indexed policyholder,
-        uint256 indexed projectId,
-        uint256 coverageAmount,
-        uint256 premium
-    );
-    event ClaimFiled(uint256 indexed policyId, uint256 claimAmount);
+    event InsurancePurchased(uint256 indexed policyId, address indexed policyholder, uint256 indexed projectId,
+        uint256 coverageAmount, uint256 premium);
+    event ClaimRequested(uint256 indexed policyId, uint256 claimAmount);
+    event ClaimApproved(uint256 indexed policyId);
     event ClaimPaid(uint256 indexed policyId, address indexed recipient, uint256 amount);
+    event PolicyExpired(uint256 indexed policyId);
     event PremiumWithdrawn(address indexed owner, uint256 amount);
 
     error InvalidProjectId();
@@ -53,8 +63,15 @@ contract InsurancePool is Ownable, ReentrancyGuard {
     error InsufficientPoolBalance();
     error PolicyNotActive();
     error ClaimExceedsCoverage();
+    error ClaimNotApproved();
+    error NotPolicyholder();
+    error Unauthorized();
 
-    constructor(address _stablecoin) Ownable(msg.sender) {
+    constructor(address _stablecoin) {
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(ADMIN_ROLE, msg.sender);
+        _grantRole(CLAIM_VALIDATOR_ROLE, msg.sender);
+
         stablecoin = IERC20(_stablecoin);
     }
 
@@ -63,7 +80,7 @@ contract InsurancePool is Ownable, ReentrancyGuard {
         if (projectToPolicy[projectId] != 0) revert PolicyAlreadyExists();
 
         uint256 premium = (coverageAmount * PREMIUM_PERCENTAGE) / 100;
-        require(stablecoin.transferFrom(msg.sender, address(this), premium), "Premium transfer failed");
+        stablecoin.safeTransferFrom(msg.sender, address(this), premium);
 
         uint256 policyId = policyCounter++;
 
@@ -74,23 +91,44 @@ contract InsurancePool is Ownable, ReentrancyGuard {
             premiumPaid: premium,
             startTime: block.timestamp,
             expiryTime: block.timestamp + POLICY_DURATION,
-            status: PolicyStatus.Active
+            status: PolicyStatus.Active,
+            claimApproved: false
         });
 
         projectToPolicy[projectId] = policyId;
         userPolicies[msg.sender].push(policyId);
         totalPremiumsCollected += premium;
+        reserveRequirement += coverageAmount;
 
         emit InsurancePurchased(policyId, msg.sender, projectId, coverageAmount, premium);
         return policyId;
     }
 
-    function fileClaim(uint256 policyId, uint256 claimAmount) external nonReentrant {
+    /// @notice Request a claim (must be approved by validator before payout)
+    function requestClaim(uint256 policyId, uint256 claimAmount) external {
         InsurancePolicy storage policy = policies[policyId];
-
-        if (msg.sender != policy.policyholder) revert PolicyNotActive();
+        if (msg.sender != policy.policyholder) revert NotPolicyholder();
         if (policy.status != PolicyStatus.Active) revert PolicyNotActive();
         if (block.timestamp > policy.expiryTime) revert PolicyNotActive();
+        if (claimAmount > policy.coverageAmount) revert ClaimExceedsCoverage();
+
+        emit ClaimRequested(policyId, claimAmount);
+    }
+
+    /// @notice Validator approves a claim after reviewing evidence
+    function approveClaim(uint256 policyId) external onlyRole(CLAIM_VALIDATOR_ROLE) {
+        InsurancePolicy storage policy = policies[policyId];
+        if (policy.status != PolicyStatus.Active) revert PolicyNotActive();
+        policy.claimApproved = true;
+        emit ClaimApproved(policyId);
+    }
+
+    /// @notice Policyholder collects approved claim
+    function collectClaim(uint256 policyId, uint256 claimAmount) external nonReentrant {
+        InsurancePolicy storage policy = policies[policyId];
+        if (msg.sender != policy.policyholder) revert NotPolicyholder();
+        if (policy.status != PolicyStatus.Active) revert PolicyNotActive();
+        if (!policy.claimApproved) revert ClaimNotApproved();
         if (claimAmount > policy.coverageAmount) revert ClaimExceedsCoverage();
 
         uint256 poolBalance = stablecoin.balanceOf(address(this));
@@ -98,9 +136,9 @@ contract InsurancePool is Ownable, ReentrancyGuard {
 
         policy.status = PolicyStatus.Claimed;
         totalClaimsPaid += claimAmount;
+        reserveRequirement -= policy.coverageAmount;
 
-        emit ClaimFiled(policyId, claimAmount);
-        require(stablecoin.transfer(policy.policyholder, claimAmount), "Claim payment failed");
+        stablecoin.safeTransfer(policy.policyholder, claimAmount);
         emit ClaimPaid(policyId, policy.policyholder, claimAmount);
     }
 
@@ -108,30 +146,19 @@ contract InsurancePool is Ownable, ReentrancyGuard {
         InsurancePolicy storage policy = policies[policyId];
         if (policy.status == PolicyStatus.Active && block.timestamp > policy.expiryTime) {
             policy.status = PolicyStatus.Expired;
+            reserveRequirement -= policy.coverageAmount;
+            emit PolicyExpired(policyId);
         }
     }
 
+    // ============ View Functions ============
+
     function getPolicy(uint256 policyId)
-        external
-        view
-        returns (
-            address policyholder,
-            uint256 projectId,
-            uint256 coverageAmount,
-            uint256 premiumPaid,
-            PolicyStatus status,
-            uint256 expiryTime
-        )
+        external view
+        returns (address, uint256, uint256, uint256, PolicyStatus, uint256, bool)
     {
-        InsurancePolicy storage policy = policies[policyId];
-        return (
-            policy.policyholder,
-            policy.projectId,
-            policy.coverageAmount,
-            policy.premiumPaid,
-            policy.status,
-            policy.expiryTime
-        );
+        InsurancePolicy storage p = policies[policyId];
+        return (p.policyholder, p.projectId, p.coverageAmount, p.premiumPaid, p.status, p.expiryTime, p.claimApproved);
     }
 
     function getUserPolicies(address user) external view returns (uint256[] memory) {
@@ -143,23 +170,27 @@ contract InsurancePool is Ownable, ReentrancyGuard {
     }
 
     function getPoolMetrics()
-        external
-        view
-        returns (uint256 premiumsCollected, uint256 claimsPaid, uint256 currentBalance, uint256 profit)
+        external view
+        returns (uint256 premiumsCollected, uint256 claimsPaid, uint256 currentBalance, uint256 reserves)
     {
-        uint256 balance = stablecoin.balanceOf(address(this));
-        return (
-            totalPremiumsCollected,
-            totalClaimsPaid,
-            balance,
-            totalPremiumsCollected > totalClaimsPaid ? totalPremiumsCollected - totalClaimsPaid : 0
-        );
+        return (totalPremiumsCollected, totalClaimsPaid, stablecoin.balanceOf(address(this)), reserveRequirement);
     }
 
-    function withdrawPremiums(uint256 amount) external onlyOwner nonReentrant {
-        uint256 availableBalance = stablecoin.balanceOf(address(this));
-        require(amount <= availableBalance, "Insufficient balance");
-        require(stablecoin.transfer(owner(), amount), "Withdrawal failed");
-        emit PremiumWithdrawn(owner(), amount);
+    // ============ Admin ============
+
+    /// @notice Withdraw only excess funds above reserve requirement
+    function withdrawPremiums(uint256 amount) external onlyRole(ADMIN_ROLE) nonReentrant {
+        uint256 available = stablecoin.balanceOf(address(this));
+        require(available - amount >= reserveRequirement, "Cannot withdraw below reserve");
+        stablecoin.safeTransfer(msg.sender, amount);
+        emit PremiumWithdrawn(msg.sender, amount);
+    }
+
+    function setClaimValidator(address validator, bool status) external onlyRole(ADMIN_ROLE) {
+        if (status) {
+            _grantRole(CLAIM_VALIDATOR_ROLE, validator);
+        } else {
+            _revokeRole(CLAIM_VALIDATOR_ROLE, validator);
+        }
     }
 }

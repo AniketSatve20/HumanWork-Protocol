@@ -6,3 +6,8 @@ export { JobDetailPage } from './JobDetailPage';
 export { CreateJobPage } from './CreateJobPage';
 export { MessagesPage } from './MessagesPage';
 export { SettingsPage } from './SettingsPage';
+export { SkillsPage } from './SkillsPage';
+export { DisputesPage } from './DisputesPage';
+export { UserProfilePage } from './UserProfilePage';
+export { JobManagePage } from './JobManagePage';
+export { KycPage } from './KycPage';

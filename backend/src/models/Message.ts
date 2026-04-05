@@ -40,7 +40,7 @@ const MessageSchema = new Schema<IMessage>(
   {
     conversationId: { type: String, required: true, index: true },
     sender: { type: String, required: true },
-    senderLower: { type: String, required: true, index: true },
+    senderLower: { type: String, required: true, index: true, select: false },
     content: { type: String, required: true },
     type: { 
       type: String, 
@@ -55,7 +55,10 @@ const MessageSchema = new Schema<IMessage>(
     },
     read: { type: Boolean, default: false },
   },
-  { timestamps: true }
+  { timestamps: true,
+    toJSON: { virtuals: true, versionKey: false },
+    toObject: { virtuals: true, versionKey: false },
+  }
 );
 
 const ConversationSchema = new Schema<IConversation>(
@@ -76,7 +79,10 @@ const ConversationSchema = new Schema<IConversation>(
     },
     unreadCount: { type: Map, of: Number, default: {} },
   },
-  { timestamps: true }
+  { timestamps: true,
+    toJSON: { virtuals: true, versionKey: false },
+    toObject: { virtuals: true, versionKey: false },
+  }
 );
 
 // Compound indexes for efficient queries

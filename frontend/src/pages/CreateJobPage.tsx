@@ -172,13 +172,13 @@ export function CreateJobPage() {
       <div className="flex items-center gap-4 mb-8">
         {['details', 'milestones', 'review'].map((s, index) => (
           <div key={s} className="flex items-center gap-2 flex-1">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-              step === s ? 'bg-primary-500 text-white' : index < ['details', 'milestones', 'review'].indexOf(step) ? 'bg-success-500 text-white' : 'bg-surface-200 text-surface-600'
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300 ${
+              step === s ? 'bg-primary-500 text-white shadow-neon' : index < ['details', 'milestones', 'review'].indexOf(step) ? 'bg-success-500 text-white' : 'bg-surface-200/50 text-surface-600'
             }`}>
               {index < ['details', 'milestones', 'review'].indexOf(step) ? <CheckCircle2 className="w-4 h-4" /> : index + 1}
             </div>
             <span className={`text-sm font-medium capitalize ${step === s ? 'text-primary-600' : 'text-surface-500'}`}>{s}</span>
-            {index < 2 && <div className="flex-1 h-0.5 bg-surface-200 mx-2" />}
+            {index < 2 && <div className="flex-1 h-0.5 bg-surface-200/50 mx-2" />}
           </div>
         ))}
       </div>

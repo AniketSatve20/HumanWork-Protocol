@@ -15,6 +15,7 @@ import { Button, Card, Badge, Textarea, Skeleton } from '@/components/common';
 import { useAuthStore } from '@/context/authStore';
 import { useJobsStore } from '@/context/jobsStore';
 import { useMessagesStore } from '@/context/messagesStore';
+import { useSoundSystem } from '@/components/ui/SoundSystem';
 import { apiService } from '@/services/api.service';
 import { web3Service } from '@/services/web3.service';
 import { parseUSDC, formatUSDC, formatDate, formatRelativeTime, getMilestoneStatusLabel, getMilestoneStatusColor, cn } from '@/utils/helpers';
@@ -28,6 +29,7 @@ export function JobDetailPage() {
   const { user, address, isAuthenticated } = useAuthStore();
   const { currentJob, isLoading, fetchJob, applyToJob } = useJobsStore();
   const { startConversation } = useMessagesStore();
+  const { playContractSign } = useSoundSystem();
 
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [coverLetter, setCoverLetter] = useState('');
@@ -133,6 +135,9 @@ export function JobDetailPage() {
       }
 
       toast.success(`Freelancer accepted! Funds locked in escrow. ${onChainProjectId ? `Project #${onChainProjectId} created.` : ''}`, { id: 'escrow' });
+
+      // Haunting piano note — contract signed
+      playContractSign();
 
       // Refresh job to show updated status
       fetchJob(parseInt(id));
@@ -442,11 +447,11 @@ export function JobDetailPage() {
 
       {/* Apply Modal */}
       {showApplyModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto"
+            className="bg-surface-100 rounded-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto border border-surface-200/50 shadow-2xl shadow-black/40"
           >
             <h2 className="text-xl font-semibold text-surface-900 mb-4">
               Apply to: {currentJob.title}

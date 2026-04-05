@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { config } from '@/utils/config';
-import type { Job, JobApplication, Conversation, Message, ApiResponse, Milestone, JobStatus } from '@/types';
+import type { Job, JobApplication, Conversation, Message, ApiResponse, Milestone, JobStatus, UserRole } from '@/types';
 
 // Map backend JobListing to frontend Job
 function mapJobListingToJob(listing: Record<string, unknown>): Job {
@@ -82,48 +82,65 @@ class ApiService {
   constructor() {
     this.client = axios.create({
       baseURL: config.apiUrl,
+      withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
       },
     });
 
-    // Request interceptor to add auth token
-    this.client.interceptors.request.use((cfg) => {
-      const token = localStorage.getItem('authToken');
-      if (token) {
-        cfg.headers.Authorization = `Bearer ${token}`;
-      }
-      return cfg;
-    });
-
-    // Response interceptor for error handling
     this.client.interceptors.response.use(
       (response) => response,
-      (error: AxiosError) => {
-        if (error.response?.status === 401) {
-          localStorage.removeItem('authToken');
-        }
-        return Promise.reject(error);
-      }
+      (error: AxiosError) => Promise.reject(error)
     );
   }
 
   // ============ Auth Endpoints ============
   
-  async getAuthMessage(): Promise<{ success: boolean; message: string }> {
-    const response = await this.client.get('/api/auth/message');
+  async getNonce(address: string): Promise<{ success: boolean; nonce: string; message: string }> {
+    const response = await this.client.get(`/api/auth/nonce?address=${address}`);
     return response.data;
+  }
+
+  // Kept for backward compatibility — redirects to getNonce
+  async getAuthMessage(address?: string): Promise<{ success: boolean; message: string }> {
+    if (address) {
+      return this.getNonce(address);
+    }
+    // Fallback for old code paths that don't pass address
+    return { success: true, message: 'Connect wallet to get nonce' };
   }
 
   async verifySignature(walletAddress: string, signature: string): Promise<{ 
     success: boolean; 
-    token: string; 
-    walletAddress: string 
+    walletAddress: string;
+    message?: string;
   }> {
     const response = await this.client.post('/api/auth/verify', { 
       walletAddress, 
       signature 
     });
+    return response.data;
+  }
+
+  async registerAccount(walletAddress: string, role: UserRole, name: string): Promise<{
+    success: boolean;
+    walletAddress: string;
+    role: UserRole;
+    message?: string;
+  }> {
+    const response = await this.client.post('/api/auth/register', {
+      walletAddress,
+      role,
+      name,
+    });
+    return response.data;
+  }
+
+  async logout(): Promise<{
+    success: boolean;
+    message?: string;
+  }> {
+    const response = await this.client.post('/api/auth/logout');
     return response.data;
   }
 
@@ -146,6 +163,34 @@ class ApiService {
     return response.data;
   }
 
+  // Update user profile (auth required)
+  async updateUserProfile(address: string, data: {
+    displayName?: string;
+    bio?: string;
+    email?: string;
+    skills?: string[];
+    hourlyRate?: number;
+    portfolio?: string[];
+    socialLinks?: { github?: string; linkedin?: string; twitter?: string; website?: string };
+    avatarIpfsHash?: string;
+  }): Promise<ApiResponse<unknown>> {
+    const response = await this.client.put(`/api/users/${address}`, data);
+    return response.data;
+  }
+
+  // Get user dashboard stats
+  async getUserStats(address: string): Promise<ApiResponse<{
+    totalEarned: string;
+    totalProjects: number;
+    completedProjects: number;
+    averageRating: number;
+    skillBadges: number;
+    level: number;
+  }>> {
+    const response = await this.client.get(`/api/users/${address}/stats`);
+    return response.data;
+  }
+
   // ============ Project/Job Endpoints ============
   
   async getProjects(params?: {
@@ -158,11 +203,11 @@ class ApiService {
     search?: string;
   }): Promise<ApiResponse<Job[]>> {
     const response = await this.client.get('/api/projects', { params });
-    const projects = response.data.projects || [];
+    const projects = response.data.data || response.data.projects || [];
     return {
       success: response.data.success,
       data: projects.map(mapProjectToJob),
-      pagination: response.data.pagination,
+      pagination: response.data.meta || response.data.pagination,
     };
   }
 
@@ -175,27 +220,29 @@ class ApiService {
     search?: string;
   }): Promise<ApiResponse<Job[]>> {
     const response = await this.client.get('/api/jobs', { params });
-    const jobs = response.data.jobs || [];
+    const jobs = response.data.data || response.data.jobs || [];
     return {
       success: response.data.success,
       data: jobs.map(mapJobListingToJob),
-      pagination: response.data.pagination,
+      pagination: response.data.meta || response.data.pagination,
     };
   }
 
   async getProject(id: number): Promise<ApiResponse<Job>> {
     const response = await this.client.get(`/api/projects/${id}`);
+    const project = response.data.data || response.data.project;
     return {
       success: response.data.success,
-      data: response.data.project ? mapProjectToJob(response.data.project) : undefined,
+      data: project ? mapProjectToJob(project) : undefined,
     };
   }
 
   async getJob(id: number): Promise<ApiResponse<Job>> {
     try {
       const response = await this.client.get(`/api/jobs/${id}`);
-      if (response.data.success && response.data.job) {
-        return { success: true, data: mapJobListingToJob(response.data.job) };
+      const job = response.data.data || response.data.job;
+      if (response.data.success && job) {
+        return { success: true, data: mapJobListingToJob(job) };
       }
     } catch (err) {
       console.debug(`Job listing ${id} not found in /api/jobs, falling back to /api/projects`, err);
@@ -208,11 +255,11 @@ class ApiService {
     if (role === 'client') {
       // Client: fetch their job listings (all statuses)
       const response = await this.client.get('/api/jobs', { params: { client: address, status: 'all' } });
-      const jobs = response.data.jobs || [];
+      const jobs = response.data.data || response.data.jobs || [];
       return {
         success: response.data.success,
         data: jobs.map(mapJobListingToJob),
-        pagination: response.data.pagination,
+        pagination: response.data.meta || response.data.pagination,
       };
     }
     // Freelancer: fetch their on-chain projects
@@ -233,7 +280,9 @@ class ApiService {
 
   async uploadProjectBrief(file: File): Promise<ApiResponse<{ 
     ipfsHash: string; 
-    gatewayUrl: string 
+    gatewayUrl: string;
+    correlationId?: string;
+    correlationTag?: string;
   }>> {
     const formData = new FormData();
     formData.append('file', file);
@@ -254,10 +303,11 @@ class ApiService {
     milestones: { description: string; amount: string }[];
   }): Promise<ApiResponse<{ jobId: number; job: Job }>> {
     const response = await this.client.post('/api/jobs', data);
+    const job = response.data.data || response.data.job;
     return {
       success: response.data.success,
-      data: response.data.job
-        ? { jobId: response.data.job.jobId, job: mapJobListingToJob(response.data.job) }
+      data: job
+        ? { jobId: job.jobId, job: mapJobListingToJob(job) }
         : undefined,
     };
   }
@@ -318,6 +368,43 @@ class ApiService {
     return response.data;
   }
 
+  async getSubmissionHistory(address: string, params?: { status?: number; testId?: number; limit?: number; offset?: number }): Promise<ApiResponse<{
+    submissions: unknown[];
+    total: number;
+    hasMore: boolean;
+  }>> {
+    const response = await this.client.get(`/api/skills/submissions/${address}`, { params });
+    return response.data;
+  }
+
+  async getSubmissionResult(address: string, submissionId: number): Promise<ApiResponse<{
+    submission: unknown;
+  }>> {
+    const response = await this.client.get(`/api/skills/submissions/${address}/${submissionId}`);
+    return response.data;
+  }
+
+  async getSkillLeaderboard(): Promise<ApiResponse<{
+    leaderboard: unknown[];
+    total: number;
+  }>> {
+    const response = await this.client.get('/api/skills/leaderboard');
+    return response.data;
+  }
+
+  async getSkillStats(): Promise<ApiResponse<{
+    stats: {
+      totalSubmissions: number;
+      gradedSubmissions: number;
+      passedSubmissions: number;
+      passRate: number;
+      averageScore: number;
+    };
+  }>> {
+    const response = await this.client.get('/api/skills/stats');
+    return response.data;
+  }
+
   // ============ Message Endpoints ============
   
   async getConversations(): Promise<ApiResponse<Conversation[]>> {
@@ -355,6 +442,11 @@ class ApiService {
     return response.data;
   }
 
+  async markConversationAsRead(conversationId: string): Promise<ApiResponse<void>> {
+    const response = await this.client.patch(`/api/messages/${conversationId}/read`);
+    return response.data;
+  }
+
   // ============ Stats Endpoints ============
   
   async getPlatformStats(): Promise<ApiResponse<{
@@ -388,7 +480,7 @@ class ApiService {
 
   async getApplications(jobId: number): Promise<ApiResponse<JobApplication[]>> {
     const response = await this.client.get(`/api/jobs/${jobId}/applications`);
-    const applications = (response.data.applications || []).map((a: Record<string, unknown>) => ({
+    const applications = (response.data.data || response.data.applications || []).map((a: Record<string, unknown>) => ({
       id: a._id as string,
       jobId: a.jobId as number,
       freelancerAddress: a.freelancerAddress as string,
@@ -411,6 +503,56 @@ class ApiService {
 
   async linkOnChainProject(jobId: number, onChainProjectId: number): Promise<ApiResponse<unknown>> {
     const response = await this.client.post(`/api/jobs/${jobId}/project`, { onChainProjectId });
+    return response.data;
+  }
+
+  // ============ KYC Endpoints ============
+
+  async getKycStatus(): Promise<ApiResponse<{
+    status: 'not_started' | 'pending_review' | 'approved_pending_onchain' | 'verified' | 'rejected';
+    isVerifiedOnChain: boolean;
+    isAdminApproved: boolean;
+    documents: { type: string; status: string; verifiedAt?: string }[];
+    legalName: string | null;
+    submittedAt?: string;
+  }>> {
+    const response = await this.client.get('/api/kyc/status');
+    return response.data;
+  }
+
+  async submitKyc(data: {
+    legalName: string;
+    documentType: string;
+    documentNumber: string;
+    document?: File;
+  }): Promise<ApiResponse<{ status: string; message: string }>> {
+    const formData = new FormData();
+    formData.append('legalName', data.legalName);
+    formData.append('documentType', data.documentType);
+    formData.append('documentNumber', data.documentNumber);
+    if (data.document) {
+      formData.append('document', data.document);
+    }
+    const response = await this.client.post('/api/kyc/submit', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  }
+
+  // ============ KYC Admin Endpoints ============
+
+  async getPendingKycSubmissions(): Promise<ApiResponse<any[]>> {
+    const response = await this.client.get('/api/kyc/admin/pending');
+    return response.data;
+  }
+
+  async approveKyc(address: string): Promise<ApiResponse<{ message: string }>> {
+    const response = await this.client.post(`/api/kyc/admin/approve/${address}`);
+    return response.data;
+  }
+
+  async rejectKyc(address: string, reason?: string): Promise<ApiResponse<{ message: string }>> {
+    const response = await this.client.post(`/api/kyc/admin/reject/${address}`, { reason });
     return response.data;
   }
 }

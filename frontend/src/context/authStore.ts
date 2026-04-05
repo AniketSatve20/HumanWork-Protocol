@@ -14,9 +14,9 @@ interface AuthState {
   error: string | null;
   
   connect: () => Promise<void>;
-  disconnect: () => void;
+  disconnect: () => Promise<void>;
   register: (role: UserRole, name: string) => Promise<void>;
-  updateUser: (data: Partial<User>) => void;
+  updateUser: (data: Partial<User>) => Promise<void>;
   setError: (error: string | null) => void;
   clearError: () => void;
 }
@@ -36,32 +36,26 @@ export const useAuthStore = create<AuthState>()(
         
         try {
           const address = await web3Service.connect();
-          const { message } = await apiService.getAuthMessage();
+          
+          // Step 1: Request a nonce for this wallet address
+          const { message } = await apiService.getNonce(address);
           
           const signer = web3Service.getSigner();
           if (!signer) {
             throw new Error('No signer available');
           }
           
+          // Step 2: Sign the nonce message
           const signature = await signer.signMessage(message);
+          
+          // Step 3: Verify signature and establish cookie-based session
           const response = await apiService.verifySignature(address, signature);
           
-          if (response.success && response.token) {
-            localStorage.setItem('authToken', response.token);
-            
-            const storedState = localStorage.getItem('humanwork-auth');
-            let existingUser = null;
-            
-            if (storedState) {
-              try {
-                const parsed = JSON.parse(storedState);
-                if (parsed.state?.user?.address?.toLowerCase() === address.toLowerCase()) {
-                  existingUser = parsed.state.user;
-                }
-              } catch (e) {
-                console.error('Failed to parse stored state:', e);
-              }
-            }
+          if (response.success) {
+            const existingUser =
+              get().user?.address?.toLowerCase() === address.toLowerCase()
+                ? get().user
+                : null;
             
             if (existingUser) {
               set({
@@ -91,9 +85,14 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      disconnect: () => {
+      disconnect: async () => {
+        try {
+          await apiService.logout();
+        } catch (error) {
+          console.warn('Logout endpoint call failed:', error);
+        }
+
         web3Service.disconnect();
-        localStorage.removeItem('authToken');
         set({
           user: null,
           address: null,
@@ -140,15 +139,42 @@ export const useAuthStore = create<AuthState>()(
             toast.dismiss('verify');
           }
 
+          // Fetch real on-chain state after registration
+          let isVerifiedHuman = false;
+          let level = 1;
+          try {
+            const [profile, verified] = await Promise.all([
+              web3Service.getUserProfile(address),
+              web3Service.isVerifiedHuman(address),
+            ]);
+            isVerifiedHuman = verified ?? false;
+            level = profile.level ?? 1;
+          } catch {
+            // On-chain query failed — use conservative defaults
+            console.warn('Could not verify on-chain registration state');
+          }
+
+          // Persist role using cookie-authenticated backend registration flow.
+          await apiService.registerAccount(address, role, name.trim());
+
           const user: User = {
             id: address,
             address,
             role,
             name,
-            isVerifiedHuman: true,
-            level: 2,
+            isVerifiedHuman,
+            level,
             createdAt: new Date().toISOString(),
           };
+
+          // Persist to backend
+          try {
+            await apiService.updateUserProfile(address, {
+              displayName: name,
+            });
+          } catch {
+            console.warn('Failed to persist profile to backend');
+          }
 
           set({
             user,
@@ -168,11 +194,24 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      updateUser: (data: Partial<User>) => {
-        const { user } = get();
-        if (user) {
-          set({ user: { ...user, ...data } });
+      updateUser: async (data: Partial<User>) => {
+        const { user, address } = get();
+        if (!user || !address) return;
+
+        // Persist to backend
+        try {
+          await apiService.updateUserProfile(address, {
+            displayName: data.name,
+            bio: data.bio,
+            email: data.email,
+            skills: data.skills,
+          });
+        } catch (e) {
+          console.warn('Failed to persist profile to backend:', e);
+          // Still update local state even if backend fails
         }
+
+        set({ user: { ...user, ...data } });
       },
 
       setError: (error: string | null) => set({ error }),

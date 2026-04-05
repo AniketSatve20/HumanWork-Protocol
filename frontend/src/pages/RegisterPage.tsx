@@ -6,10 +6,7 @@ import {
   Building2,
   ArrowRight,
   CheckCircle2,
-  Briefcase,
-  DollarSign,
   Shield,
-  Zap,
 } from 'lucide-react';
 import { Button, Input } from '@/components/common';
 import { useAuthStore } from '@/context/authStore';
@@ -92,23 +89,35 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-50 flex items-center justify-center py-12 px-4">
-      <div className="w-full max-w-4xl">
+    <div className="min-h-screen bg-surface-50 relative flex items-center justify-center py-12 px-4 overflow-hidden">
+      {/* Ambient glows */}
+      <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-primary-500/[0.06] rounded-full blur-[140px]" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-accent-500/[0.06] rounded-full blur-[120px]" />
+      <div
+        className="absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px)',
+          backgroundSize: '64px 64px',
+        }}
+      />
+
+      <div className="relative w-full max-w-4xl">
         {/* Progress Steps */}
         <div className="flex items-center justify-center mb-12">
           <div className="flex items-center gap-4">
-            <div className={`flex items-center gap-2 ${step === 'role' ? 'text-primary-600' : 'text-surface-400'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                step === 'role' ? 'bg-primary-500 text-white' : 'bg-surface-200 text-surface-600'
+            <div className={`flex items-center gap-2 ${step === 'role' ? 'text-primary-600' : 'text-surface-500'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300 ${
+                step === 'role' ? 'bg-primary-500 text-white shadow-neon' : 'bg-surface-200/50 text-surface-600'
               }`}>
                 1
               </div>
               <span className="font-medium">Choose Role</span>
             </div>
-            <div className="w-16 h-0.5 bg-surface-200" />
-            <div className={`flex items-center gap-2 ${step === 'profile' ? 'text-primary-600' : 'text-surface-400'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                step === 'profile' ? 'bg-primary-500 text-white' : 'bg-surface-200 text-surface-600'
+            <div className="w-16 h-0.5 bg-surface-200/50" />
+            <div className={`flex items-center gap-2 ${step === 'profile' ? 'text-primary-600' : 'text-surface-500'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300 ${
+                step === 'profile' ? 'bg-primary-500 text-white shadow-neon' : 'bg-surface-200/50 text-surface-600'
               }`}>
                 2
               </div>
@@ -148,7 +157,7 @@ export function RegisterPage() {
                         ? role.id === 'freelancer'
                           ? 'border-primary-500 bg-primary-50'
                           : 'border-accent-500 bg-accent-50'
-                        : 'border-surface-200 bg-white hover:border-surface-300'
+                        : 'border-surface-200/50 bg-surface-100 hover:border-surface-300'
                     }`}
                   >
                     {isSelected && (

@@ -4,15 +4,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send,
   CheckCircle2,
-  Clock,
   DollarSign,
   AlertTriangle,
   MessageSquare,
-  ChevronRight,
-  Award,
   FileText,
 } from 'lucide-react';
-import { Button, Card, Badge, Skeleton, EmptyState, Progress } from '@/components/common';
+import { Button, Skeleton, EmptyState, Progress } from '@/components/common';
 import { useAuthStore } from '@/context/authStore';
 import { useMessagesStore } from '@/context/messagesStore';
 import { useJobsStore } from '@/context/jobsStore';
@@ -255,7 +252,7 @@ function MilestonePanel({
 
 export function MessagesPage() {
   const [searchParams] = useSearchParams();
-  const { user, address } = useAuthStore();
+  const { address } = useAuthStore();
   const {
     conversations,
     currentConversation,
@@ -266,8 +263,11 @@ export function MessagesPage() {
     fetchConversation,
     fetchMessages,
     sendMessage,
-    startConversation,
     markAsRead,
+    initSocket,
+    cleanupSocket,
+    joinRoom,
+    leaveRoom,
   } = useMessagesStore();
   const { currentJob, fetchJob } = useJobsStore();
 
@@ -277,6 +277,15 @@ export function MessagesPage() {
   const [messageInput, setMessageInput] = useState('');
   const [showMilestones, setShowMilestones] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const prevConversationId = useRef<string | null>(null);
+
+  // Initialize Socket.IO connection
+  useEffect(() => {
+    initSocket();
+    return () => {
+      cleanupSocket();
+    };
+  }, [initSocket, cleanupSocket]);
 
   // Handle ?job= param - find existing conversation or prompt to start one
   useEffect(() => {
@@ -297,11 +306,19 @@ export function MessagesPage() {
 
   useEffect(() => {
     if (selectedConversationId) {
+      // Leave the previous room
+      if (prevConversationId.current && prevConversationId.current !== selectedConversationId) {
+        leaveRoom(prevConversationId.current);
+      }
+      // Join the new room
+      joinRoom(selectedConversationId);
+      prevConversationId.current = selectedConversationId;
+
       fetchConversation(selectedConversationId);
       fetchMessages(selectedConversationId);
       markAsRead(selectedConversationId);
     }
-  }, [selectedConversationId, fetchConversation, fetchMessages, markAsRead]);
+  }, [selectedConversationId, fetchConversation, fetchMessages, markAsRead, joinRoom, leaveRoom]);
 
   useEffect(() => {
     if (currentConversation?.jobId) {
@@ -335,7 +352,7 @@ export function MessagesPage() {
   return (
     <div className="h-[calc(100vh-4rem)] flex">
       {/* Conversations List */}
-      <div className="w-80 border-r border-surface-200 bg-white flex-shrink-0">
+      <div className="w-80 border-r border-surface-200/50 bg-surface-100 flex-shrink-0">
         <div className="p-4 border-b border-surface-200">
           <h2 className="font-semibold text-surface-900">Messages</h2>
         </div>
@@ -359,7 +376,7 @@ export function MessagesPage() {
         {selectedConversationId && currentConversation ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 bg-white border-b border-surface-200 flex items-center justify-between">
+            <div className="p-4 bg-surface-100/80 backdrop-blur-sm border-b border-surface-200/50 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <img
                   src={otherParticipant?.avatar || generateAvatar(otherParticipant?.address || '')}
@@ -398,7 +415,7 @@ export function MessagesPage() {
                 </div>
 
                 {/* Message Input */}
-                <div className="p-4 bg-white border-t border-surface-200">
+                <div className="p-4 bg-surface-100/80 backdrop-blur-sm border-t border-surface-200/50">
                   <div className="flex gap-2">
                     <textarea
                       value={messageInput}
@@ -422,7 +439,7 @@ export function MessagesPage() {
                     initial={{ width: 0, opacity: 0 }}
                     animate={{ width: 320, opacity: 1 }}
                     exit={{ width: 0, opacity: 0 }}
-                    className="border-l border-surface-200 bg-white overflow-hidden"
+                    className="border-l border-surface-200/50 bg-surface-100 overflow-hidden"
                   >
                     <div className="w-80 p-4 h-full overflow-y-auto">
                       <h3 className="font-semibold text-surface-900 mb-4">Project Milestones</h3>

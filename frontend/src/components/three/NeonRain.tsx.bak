@@ -1,0 +1,1026 @@
+import { useRef, useMemo, useState, useEffect } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
+import * as THREE from 'three';
+
+/* ── Responsive breakpoint hook ──────────────────────────────────────── */
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false
+  );
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener('resize', handler, { passive: true });
+    return () => window.removeEventListener('resize', handler);
+  }, [breakpoint]);
+  return isMobile;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Quantum Neural Network — Kinetic Energy Particle System
+   BR2049 "Las Vegas Haze" palette: Amber-Saffron #FFB800, Synthetic Cyan #00F0FF
+   Features: Shockwave physics on click, drag-to-explore rotation, cinematic inertia
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Simplex Noise (GLSL) ─────────────────────────────────────────────── */
+const NOISE_GLSL = `
+vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 permute(vec4 x) { return mod289(((x * 34.0) + 1.0) * x); }
+vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+float snoise(vec3 v) {
+  const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+  const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+  vec3 i = floor(v + dot(v, C.yyy));
+  vec3 x0 = v - i + dot(i, C.xxx);
+  vec3 g = step(x0.yzx, x0.xyz);
+  vec3 l = 1.0 - g;
+  vec3 i1 = min(g.xyz, l.zxy);
+  vec3 i2 = max(g.xyz, l.zxy);
+  vec3 x1 = x0 - i1 + C.xxx;
+  vec3 x2 = x0 - i2 + C.yyy;
+  vec3 x3 = x0 - D.yyy;
+  i = mod289(i);
+  vec4 p = permute(permute(permute(
+    i.z + vec4(0.0, i1.z, i2.z, 1.0))
+    + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+    + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+  float n_ = 0.142857142857;
+  vec3 ns = n_ * D.wyz - D.xzx;
+  vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+  vec4 x_ = floor(j * ns.z);
+  vec4 y_ = floor(j - 7.0 * x_);
+  vec4 x = x_ * ns.x + ns.yyyy;
+  vec4 y = y_ * ns.x + ns.yyyy;
+  vec4 h = 1.0 - abs(x) - abs(y);
+  vec4 b0 = vec4(x.xy, y.xy);
+  vec4 b1 = vec4(x.zw, y.zw);
+  vec4 s0 = floor(b0) * 2.0 + 1.0;
+  vec4 s1 = floor(b1) * 2.0 + 1.0;
+  vec4 sh = -step(h, vec4(0.0));
+  vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+  vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+  vec3 p0 = vec3(a0.xy, h.x);
+  vec3 p1 = vec3(a0.zw, h.y);
+  vec3 p2 = vec3(a1.xy, h.z);
+  vec3 p3 = vec3(a1.zw, h.w);
+  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+  p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+  vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+  m = m * m;
+  return 42.0 * dot(m * m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+}
+`;
+
+/* ── Data Types ───────────────────────────────────────────────────────── */
+interface NodeData {
+  position: THREE.Vector3;
+  basePosition: THREE.Vector3;
+  velocity: THREE.Vector3;
+  level: number;
+  type: number;
+  size: number;
+  distanceFromRoot: number;
+  connections: { index: number; strength: number }[];
+}
+
+/* ── Network Generator ────────────────────────────────────────────────── */
+function generateCrystalNetwork(nodeCount: number): NodeData[] {
+  const nodes: NodeData[] = [];
+  const goldenRatio = (1 + Math.sqrt(5)) / 2;
+
+  nodes.push({
+    position: new THREE.Vector3(0, 0, 0),
+    basePosition: new THREE.Vector3(0, 0, 0),
+    velocity: new THREE.Vector3(0, 0, 0),
+    level: 0, type: 0, size: 2.0, distanceFromRoot: 0,
+    connections: [],
+  });
+
+  const layers = 5;
+  for (let layer = 1; layer <= layers; layer++) {
+    const radius = layer * 4;
+    const numPoints = Math.floor((layer * 12 * nodeCount) / 200);
+
+    for (let i = 0; i < numPoints; i++) {
+      const phi = Math.acos(1 - 2 * (i + 0.5) / numPoints);
+      const theta = 2 * Math.PI * i / goldenRatio;
+
+      const pos = new THREE.Vector3(
+        radius * Math.sin(phi) * Math.cos(theta),
+        radius * Math.sin(phi) * Math.sin(theta),
+        radius * Math.cos(phi)
+      );
+
+      const isLeaf = layer === layers || Math.random() < 0.3;
+      nodes.push({
+        position: pos.clone(),
+        basePosition: pos.clone(),
+        velocity: new THREE.Vector3(0, 0, 0),
+        level: layer,
+        type: isLeaf ? 1 : 0,
+        size: isLeaf ? 0.5 + Math.random() * 0.5 : 0.8 + Math.random() * 0.6,
+        distanceFromRoot: radius,
+        connections: [],
+      });
+    }
+  }
+
+  // Build connections
+  for (let i = 1; i < nodes.length; i++) {
+    const node = nodes[i];
+    const prevLayerNodes = nodes.filter((n, idx) => idx > 0 && n.level === node.level - 1);
+    prevLayerNodes
+      .sort((a, b) => node.basePosition.distanceTo(a.basePosition) - node.basePosition.distanceTo(b.basePosition))
+      .slice(0, 3)
+      .forEach((prev) => {
+        const prevIdx = nodes.indexOf(prev);
+        const dist = node.basePosition.distanceTo(prev.basePosition);
+        const strength = Math.max(0.3, 1.0 - dist / (node.distanceFromRoot * 2));
+        node.connections.push({ index: prevIdx, strength });
+      });
+
+    const sameLayer = nodes.filter((n, idx) => idx !== i && n.level === node.level);
+    sameLayer
+      .sort((a, b) => node.basePosition.distanceTo(a.basePosition) - node.basePosition.distanceTo(b.basePosition))
+      .slice(0, 3)
+      .forEach((near) => {
+        const nearIdx = nodes.indexOf(near);
+        const dist = node.basePosition.distanceTo(near.basePosition);
+        if (dist < node.distanceFromRoot * 0.8) {
+          node.connections.push({ index: nearIdx, strength: 0.5 });
+        }
+      });
+  }
+
+  const layer1 = nodes.filter((n) => n.level === 1);
+  layer1.forEach((n) => {
+    const idx = nodes.indexOf(n);
+    nodes[0].connections.push({ index: idx, strength: 0.9 });
+  });
+
+  return nodes;
+}
+
+/* ── Starfield Background ─────────────────────────────────────────────── */
+function Starfield() {
+  const ref = useRef<any>(null!);
+
+  const [positions, colors, sizes] = useMemo(() => {
+    const count = 5000;
+    const pos = new Float32Array(count * 3);
+    const col = new Float32Array(count * 3);
+    const siz = new Float32Array(count);
+
+    for (let i = 0; i < count; i++) {
+      const r = 50 + Math.random() * 100;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const theta = Math.random() * Math.PI * 2;
+      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      pos[i * 3 + 2] = r * Math.cos(phi);
+
+      // 2049 Las Vegas starfield: amber warmth, some cyan
+      const choice = Math.random();
+      if (choice < 0.5) { col[i * 3] = 1; col[i * 3 + 1] = 0.92; col[i * 3 + 2] = 0.78; }   // warm white
+      else if (choice < 0.75) { col[i * 3] = 1; col[i * 3 + 1] = 0.72; col[i * 3 + 2] = 0; }  // amber-saffron
+      else if (choice < 0.9) { col[i * 3] = 0; col[i * 3 + 1] = 0.94; col[i * 3 + 2] = 1; }   // synthetic cyan
+      else { col[i * 3] = 1; col[i * 3 + 1] = 0.55; col[i * 3 + 2] = 0.2; }                    // deep amber
+
+      siz[i] = 0.1 + Math.random() * 0.2;
+    }
+
+    return [pos, col, siz];
+  }, []);
+
+  const material = useMemo(() => new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 } },
+    vertexShader: `
+      attribute float size;
+      attribute vec3 color;
+      varying vec3 vColor;
+      uniform float uTime;
+      void main() {
+        vColor = color;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        float twinkle = sin(uTime * 2.0 + position.x * 100.0) * 0.3 + 0.7;
+        gl_PointSize = size * twinkle * (300.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      void main() {
+        vec2 center = gl_PointCoord - 0.5;
+        float dist = length(center);
+        if (dist > 0.5) discard;
+        float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+        gl_FragColor = vec4(vColor, alpha * 0.6);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  }), []);
+
+  useFrame(({ clock }) => {
+    material.uniforms.uTime.value = clock.getElapsedTime();
+    ref.current.rotation.y += 0.0002;
+  });
+
+  return (
+    <points ref={ref as any} material={material as any}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" count={positions.length / 3} array={positions} itemSize={3} />
+        <bufferAttribute attach="attributes-color" count={colors.length / 3} array={colors} itemSize={3} />
+        <bufferAttribute attach="attributes-size" count={sizes.length} array={sizes} itemSize={1} />
+      </bufferGeometry>
+    </points>
+  );
+}
+
+/* ── Network Nodes with Shockwave Physics ─────────────────────────────── */
+function NetworkNodes({
+  nodes,
+  pulseUniforms,
+  shockwaves,
+}: {
+  nodes: NodeData[];
+  pulseUniforms: React.MutableRefObject<{
+    uTime: { value: number };
+    uPulsePositions: { value: THREE.Vector3[] };
+    uPulseTimes: { value: number[] };
+    uPulseColors: { value: THREE.Color[] };
+  }>;
+  shockwaves: React.MutableRefObject<{ origin: THREE.Vector3; time: number; force: number }[]>;
+}) {
+  const ref = useRef<any>(null!);
+  const posAttr = useRef<THREE.BufferAttribute | null>(null);
+
+  const [geo, mat] = useMemo(() => {
+    const positions = new Float32Array(nodes.length * 3);
+    const basePositions = new Float32Array(nodes.length * 3);
+    const nodeTypes = new Float32Array(nodes.length);
+    const nodeSizes = new Float32Array(nodes.length);
+    const nodeColors = new Float32Array(nodes.length * 3);
+    const distFromRoot = new Float32Array(nodes.length);
+
+    // Amber-Saffron / Synthetic Cyan palette
+    const palette = [
+      new THREE.Color('#FFB800'), // amber-saffron
+      new THREE.Color('#FFD54F'), // lighter amber
+      new THREE.Color('#00F0FF'), // synthetic cyan
+      new THREE.Color('#00AACC'), // deeper cyan
+      new THREE.Color('#FF6F20'), // deep amber accent
+    ];
+
+    nodes.forEach((node, i) => {
+      positions[i * 3] = node.position.x;
+      positions[i * 3 + 1] = node.position.y;
+      positions[i * 3 + 2] = node.position.z;
+      basePositions[i * 3] = node.basePosition.x;
+      basePositions[i * 3 + 1] = node.basePosition.y;
+      basePositions[i * 3 + 2] = node.basePosition.z;
+      nodeTypes[i] = node.type;
+      nodeSizes[i] = node.size;
+      distFromRoot[i] = node.distanceFromRoot;
+
+      const baseColor = palette[node.level % palette.length].clone();
+      baseColor.offsetHSL(
+        (Math.random() - 0.5) * 0.04,
+        (Math.random() - 0.5) * 0.1,
+        (Math.random() - 0.5) * 0.1
+      );
+      nodeColors[i * 3] = baseColor.r;
+      nodeColors[i * 3 + 1] = baseColor.g;
+      nodeColors[i * 3 + 2] = baseColor.b;
+    });
+
+    const geometry = new THREE.BufferGeometry();
+    const positionAttr = new THREE.Float32BufferAttribute(positions, 3);
+    geometry.setAttribute('position', positionAttr);
+    geometry.setAttribute('basePosition', new THREE.Float32BufferAttribute(basePositions, 3));
+    geometry.setAttribute('nodeType', new THREE.Float32BufferAttribute(nodeTypes, 1));
+    geometry.setAttribute('nodeSize', new THREE.Float32BufferAttribute(nodeSizes, 1));
+    geometry.setAttribute('nodeColor', new THREE.Float32BufferAttribute(nodeColors, 3));
+    geometry.setAttribute('distanceFromRoot', new THREE.Float32BufferAttribute(distFromRoot, 1));
+    posAttr.current = positionAttr;
+
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uPulsePositions: { value: [new THREE.Vector3(1e3,1e3,1e3), new THREE.Vector3(1e3,1e3,1e3), new THREE.Vector3(1e3,1e3,1e3)] },
+        uPulseTimes: { value: [-1e3, -1e3, -1e3] },
+        uPulseColors: { value: [new THREE.Color('#FFB800'), new THREE.Color('#00F0FF'), new THREE.Color('#FF6F20')] },
+        uPulseSpeed: { value: 18.0 },
+        uBaseNodeSize: { value: 0.6 },
+      },
+      vertexShader: `${NOISE_GLSL}
+        attribute float nodeSize;
+        attribute float nodeType;
+        attribute vec3 nodeColor;
+        attribute float distanceFromRoot;
+        
+        uniform float uTime;
+        uniform vec3 uPulsePositions[3];
+        uniform float uPulseTimes[3];
+        uniform float uPulseSpeed;
+        uniform float uBaseNodeSize;
+        
+        varying vec3 vColor;
+        varying float vNodeType;
+        varying vec3 vPosition;
+        varying float vPulseIntensity;
+        varying float vDistanceFromRoot;
+        varying float vGlow;
+
+        float getPulseIntensity(vec3 worldPos, vec3 pulsePos, float pulseTime) {
+          if (pulseTime < 0.0) return 0.0;
+          float timeSince = uTime - pulseTime;
+          if (timeSince < 0.0 || timeSince > 5.0) return 0.0;
+          float pulseRadius = timeSince * uPulseSpeed;
+          float distToClick = distance(worldPos, pulsePos);
+          float thickness = 4.0;
+          float proximity = abs(distToClick - pulseRadius);
+          return smoothstep(thickness, 0.0, proximity) * smoothstep(5.0, 0.0, timeSince);
+        }
+
+        void main() {
+          vNodeType = nodeType;
+          vColor = nodeColor;
+          vDistanceFromRoot = distanceFromRoot;
+
+          vec3 worldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+          vPosition = worldPos;
+
+          float totalPulse = 0.0;
+          for (int i = 0; i < 3; i++) {
+            totalPulse += getPulseIntensity(worldPos, uPulsePositions[i], uPulseTimes[i]);
+          }
+          vPulseIntensity = min(totalPulse, 1.0);
+
+          float breathe = sin(uTime * 0.7 + distanceFromRoot * 0.15) * 0.15 + 0.85;
+          float baseSize = nodeSize * breathe;
+          float pulseSize = baseSize * (1.0 + vPulseIntensity * 3.0);
+
+          vGlow = 0.5 + 0.5 * sin(uTime * 0.5 + distanceFromRoot * 0.2);
+
+          vec3 modPos = position;
+          if (nodeType > 0.5) {
+            float noise = snoise(position * 0.08 + uTime * 0.08);
+            modPos += vec3(noise * 0.15);
+          }
+
+          vec4 mvPos = modelViewMatrix * vec4(modPos, 1.0);
+          gl_PointSize = pulseSize * uBaseNodeSize * (1000.0 / -mvPos.z);
+          gl_Position = projectionMatrix * mvPos;
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform vec3 uPulseColors[3];
+        
+        varying vec3 vColor;
+        varying float vNodeType;
+        varying vec3 vPosition;
+        varying float vPulseIntensity;
+        varying float vDistanceFromRoot;
+        varying float vGlow;
+
+        void main() {
+          vec2 center = 2.0 * gl_PointCoord - 1.0;
+          float dist = length(center);
+          if (dist > 1.0) discard;
+
+          float glow1 = 1.0 - smoothstep(0.0, 0.5, dist);
+          float glow2 = 1.0 - smoothstep(0.0, 1.0, dist);
+          float glowStrength = pow(glow1, 1.2) + glow2 * 0.3;
+
+          float breatheColor = 0.9 + 0.1 * sin(uTime * 0.6 + vDistanceFromRoot * 0.25);
+          vec3 baseColor = vColor * breatheColor;
+          vec3 finalColor = baseColor;
+
+          if (vPulseIntensity > 0.0) {
+            vec3 pulseColor = mix(vec3(1.0, 0.94, 0.7), uPulseColors[0], 0.4);
+            finalColor = mix(baseColor, pulseColor, vPulseIntensity * 0.85);
+            finalColor *= (1.0 + vPulseIntensity * 1.5);
+            glowStrength *= (1.0 + vPulseIntensity * 1.2);
+          }
+
+          float coreBright = smoothstep(0.4, 0.0, dist);
+          finalColor += vec3(1.0, 0.95, 0.8) * coreBright * 0.35;
+
+          float alpha = glowStrength * (0.95 - 0.3 * dist);
+          float camDist = length(vPosition - cameraPosition);
+          float distFade = smoothstep(100.0, 15.0, camDist);
+
+          if (vNodeType > 0.5) {
+            finalColor *= 1.15;
+            alpha *= 0.9;
+          }
+
+          finalColor *= (1.0 + vGlow * 0.12);
+          gl_FragColor = vec4(finalColor, alpha * distFade);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+
+    return [geometry, material];
+  }, [nodes]);
+
+  // Shockwave physics: push particles, spring back with inertia
+  useFrame(({ clock }, delta) => {
+    const t = clock.getElapsedTime();
+    mat.uniforms.uTime.value = t;
+
+    const pu = pulseUniforms.current;
+    mat.uniforms.uPulsePositions.value = pu.uPulsePositions.value;
+    mat.uniforms.uPulseTimes.value = pu.uPulseTimes.value;
+    mat.uniforms.uPulseColors.value = pu.uPulseColors.value;
+
+    ref.current.rotation.y = Math.sin(t * 0.04) * 0.05;
+
+    // Apply shockwave physics to node positions
+    if (posAttr.current) {
+      const posArr = posAttr.current.array as Float32Array;
+      const dt = Math.min(delta, 0.05); // cap delta for stability
+
+      for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+
+        // Apply shockwave forces
+        for (const sw of shockwaves.current) {
+          const timeSince = t - sw.time;
+          if (timeSince < 0 || timeSince > 3.0) continue;
+          const shockRadius = timeSince * 20;
+          const dist = node.position.distanceTo(sw.origin);
+          const proximity = Math.abs(dist - shockRadius);
+          if (proximity < 5.0) {
+            const dir = node.position.clone().sub(sw.origin).normalize();
+            const intensity = (1.0 - proximity / 5.0) * Math.max(0, 1.0 - timeSince / 3.0) * sw.force;
+            node.velocity.add(dir.multiplyScalar(intensity * dt * 80));
+          }
+        }
+
+        // Spring back to base position with heavy damping (cinematic inertia)
+        const springForce = node.basePosition.clone().sub(node.position);
+        node.velocity.add(springForce.multiplyScalar(2.0 * dt));
+        node.velocity.multiplyScalar(1.0 - 3.0 * dt); // heavy damping = cinematic mass
+
+        node.position.add(node.velocity.clone().multiplyScalar(dt));
+
+        posArr[i * 3] = node.position.x;
+        posArr[i * 3 + 1] = node.position.y;
+        posArr[i * 3 + 2] = node.position.z;
+      }
+
+      posAttr.current.needsUpdate = true;
+    }
+  });
+
+  return <points ref={ref as any} geometry={geo as any} material={mat as any} />;
+}
+
+/* ── Network Connections (Lines) ──────────────────────────────────────── */
+function NetworkConnections({
+  nodes,
+  pulseUniforms,
+}: {
+  nodes: NodeData[];
+  pulseUniforms: React.MutableRefObject<{
+    uTime: { value: number };
+    uPulsePositions: { value: THREE.Vector3[] };
+    uPulseTimes: { value: number[] };
+    uPulseColors: { value: THREE.Color[] };
+  }>;
+}) {
+  const ref = useRef<any>(null!);
+
+  const [geo, mat] = useMemo(() => {
+    const palette = [
+      new THREE.Color('#FFB800'),
+      new THREE.Color('#FFD54F'),
+      new THREE.Color('#00F0FF'),
+      new THREE.Color('#00AACC'),
+      new THREE.Color('#FF6F20'),
+    ];
+
+    const positions: number[] = [];
+    const startPoints: number[] = [];
+    const endPoints: number[] = [];
+    const strengths: number[] = [];
+    const connColors: number[] = [];
+    const pathIndices: number[] = [];
+    const processed = new Set<string>();
+    let pathIdx = 0;
+
+    nodes.forEach((node, ni) => {
+      node.connections.forEach((conn) => {
+        const key = `${Math.min(ni, conn.index)}-${Math.max(ni, conn.index)}`;
+        if (processed.has(key)) return;
+        processed.add(key);
+
+        const start = node.basePosition;
+        const end = nodes[conn.index].basePosition;
+        const numSeg = 16;
+
+        for (let s = 0; s < numSeg; s++) {
+          const t = s / (numSeg - 1);
+          positions.push(t, 0, 0);
+          startPoints.push(start.x, start.y, start.z);
+          endPoints.push(end.x, end.y, end.z);
+          pathIndices.push(pathIdx);
+          strengths.push(conn.strength);
+
+          const avgLevel = Math.floor((node.level + nodes[conn.index].level) / 2);
+          const cc = palette[avgLevel % palette.length].clone();
+          cc.offsetHSL((Math.random() - 0.5) * 0.03, (Math.random() - 0.5) * 0.08, (Math.random() - 0.5) * 0.08);
+          connColors.push(cc.r, cc.g, cc.b);
+        }
+        pathIdx++;
+      });
+    });
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('startPoint', new THREE.Float32BufferAttribute(startPoints, 3));
+    geometry.setAttribute('endPoint', new THREE.Float32BufferAttribute(endPoints, 3));
+    geometry.setAttribute('connectionStrength', new THREE.Float32BufferAttribute(strengths, 1));
+    geometry.setAttribute('connectionColor', new THREE.Float32BufferAttribute(connColors, 3));
+    geometry.setAttribute('pathIndex', new THREE.Float32BufferAttribute(pathIndices, 1));
+
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uPulsePositions: { value: [new THREE.Vector3(1e3,1e3,1e3), new THREE.Vector3(1e3,1e3,1e3), new THREE.Vector3(1e3,1e3,1e3)] },
+        uPulseTimes: { value: [-1e3, -1e3, -1e3] },
+        uPulseColors: { value: [new THREE.Color('#FFB800'), new THREE.Color('#00F0FF'), new THREE.Color('#FF6F20')] },
+        uPulseSpeed: { value: 18.0 },
+      },
+      vertexShader: `${NOISE_GLSL}
+        attribute vec3 startPoint;
+        attribute vec3 endPoint;
+        attribute float connectionStrength;
+        attribute float pathIndex;
+        attribute vec3 connectionColor;
+        
+        uniform float uTime;
+        uniform vec3 uPulsePositions[3];
+        uniform float uPulseTimes[3];
+        uniform float uPulseSpeed;
+        
+        varying vec3 vColor;
+        varying float vStrength;
+        varying float vPulseIntensity;
+        varying float vPathPos;
+        varying float vDistCam;
+
+        float getPulseIntensity(vec3 worldPos, vec3 pulsePos, float pulseTime) {
+          if (pulseTime < 0.0) return 0.0;
+          float timeSince = uTime - pulseTime;
+          if (timeSince < 0.0 || timeSince > 5.0) return 0.0;
+          float pulseRadius = timeSince * uPulseSpeed;
+          float distToClick = distance(worldPos, pulsePos);
+          float thickness = 4.0;
+          float proximity = abs(distToClick - pulseRadius);
+          return smoothstep(thickness, 0.0, proximity) * smoothstep(5.0, 0.0, timeSince);
+        }
+
+        void main() {
+          float t = position.x;
+          vPathPos = t;
+
+          vec3 midPoint = mix(startPoint, endPoint, 0.5);
+          float pathOff = sin(t * 3.14159) * 0.15;
+          vec3 perp = normalize(cross(normalize(endPoint - startPoint), vec3(0.0, 1.0, 0.0)));
+          if (length(perp) < 0.1) perp = vec3(1.0, 0.0, 0.0);
+          midPoint += perp * pathOff;
+
+          vec3 p0 = mix(startPoint, midPoint, t);
+          vec3 p1 = mix(midPoint, endPoint, t);
+          vec3 finalPos = mix(p0, p1, t);
+
+          float noise = snoise(vec3(pathIndex * 0.08, t * 0.6, uTime * 0.15));
+          finalPos += perp * noise * 0.12;
+
+          vec3 worldPos = (modelMatrix * vec4(finalPos, 1.0)).xyz;
+          float totalPulse = 0.0;
+          for (int i = 0; i < 3; i++) {
+            totalPulse += getPulseIntensity(worldPos, uPulsePositions[i], uPulseTimes[i]);
+          }
+          vPulseIntensity = min(totalPulse, 1.0);
+
+          vColor = connectionColor;
+          vStrength = connectionStrength;
+          vDistCam = length(worldPos - cameraPosition);
+
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(finalPos, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform vec3 uPulseColors[3];
+        
+        varying vec3 vColor;
+        varying float vStrength;
+        varying float vPulseIntensity;
+        varying float vPathPos;
+        varying float vDistCam;
+
+        void main() {
+          float flow1 = sin(vPathPos * 25.0 - uTime * 4.0) * 0.5 + 0.5;
+          float flow2 = sin(vPathPos * 15.0 - uTime * 2.5 + 1.57) * 0.5 + 0.5;
+          float combinedFlow = (flow1 + flow2 * 0.5) / 1.5;
+
+          vec3 baseColor = vColor * (0.8 + 0.2 * sin(uTime * 0.6 + vPathPos * 12.0));
+          float flowIntensity = 0.4 * combinedFlow * vStrength;
+          vec3 finalColor = baseColor;
+
+          if (vPulseIntensity > 0.0) {
+            vec3 pulseColor = mix(vec3(1.0, 0.94, 0.7), uPulseColors[0], 0.3);
+            finalColor = mix(baseColor, pulseColor * 1.3, vPulseIntensity * 0.8);
+            flowIntensity += vPulseIntensity * 0.9;
+          }
+
+          finalColor *= (0.7 + flowIntensity + vStrength * 0.5);
+          float baseAlpha = 0.7 * vStrength;
+          float flowAlpha = combinedFlow * 0.3;
+          float alpha = baseAlpha + flowAlpha;
+          alpha = mix(alpha, min(1.0, alpha * 2.5), vPulseIntensity);
+          float distFade = smoothstep(100.0, 15.0, vDistCam);
+
+          gl_FragColor = vec4(finalColor, alpha * distFade);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+
+    return [geometry, material];
+  }, [nodes]);
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    mat.uniforms.uTime.value = t;
+
+    const pu = pulseUniforms.current;
+    mat.uniforms.uPulsePositions.value = pu.uPulsePositions.value;
+    mat.uniforms.uPulseTimes.value = pu.uPulseTimes.value;
+    mat.uniforms.uPulseColors.value = pu.uPulseColors.value;
+
+    ref.current.rotation.y = Math.sin(t * 0.04) * 0.05;
+  });
+
+  return <lineSegments ref={ref as any} geometry={geo as any} material={mat as any} />;
+}
+
+/* ── Shockwave Ring Mesh (visual expanding ring on click) ─────────────── */
+function ShockwaveRings({
+  shockwaves: _shockwaves,
+}: {
+  shockwaves: React.MutableRefObject<{ origin: THREE.Vector3; time: number; force: number }[]>;
+}) {
+  const ringsRef = useRef<any>(null!);
+
+  const ringMat = useMemo(() => new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uBirthTime: { value: 0 },
+      uColor: { value: new THREE.Color('#FFB800') },
+    },
+    vertexShader: `
+      uniform float uTime;
+      uniform float uBirthTime;
+      varying float vDist;
+      void main() {
+        float age = uTime - uBirthTime;
+        float scale = age * 20.0;
+        vec3 scaled = position * scale;
+        vDist = length(position.xy);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(scaled, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      uniform float uBirthTime;
+      uniform vec3 uColor;
+      varying float vDist;
+      void main() {
+        float age = uTime - uBirthTime;
+        float fade = smoothstep(3.0, 0.0, age);
+        float ring = smoothstep(0.8, 0.9, vDist) * smoothstep(1.0, 0.95, vDist);
+        float alpha = ring * fade * 0.6;
+        vec3 col = uColor * (1.0 + fade * 0.5);
+        gl_FragColor = vec4(col, alpha);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+  }), []);
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    ringMat.uniforms.uTime.value = t;
+  });
+
+  return <group ref={ringsRef} />;
+}
+
+/* ── Interaction Controller: Shockwave + Drag-to-Explore ──────────────── */
+function InteractionController({
+  pulseUniforms,
+  shockwaves,
+}: {
+  pulseUniforms: React.MutableRefObject<{
+    uTime: { value: number };
+    uPulsePositions: { value: THREE.Vector3[] };
+    uPulseTimes: { value: number[] };
+    uPulseColors: { value: THREE.Color[] };
+  }>;
+  shockwaves: React.MutableRefObject<{ origin: THREE.Vector3; time: number; force: number }[]>;
+}) {
+  const { camera, gl, clock } = useThree();
+  const lastPulseIdx = useRef(0);
+  const isDragging = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const targetRotation = useRef({ x: 0, y: 0 });
+  const currentRotation = useRef({ x: 0, y: 0 });
+  const velocity = useRef({ x: 0, y: 0 });
+  const lastPointer = useRef({ x: 0, y: 0 });
+  const clickStartTime = useRef(0);
+
+  const raycaster = useMemo(() => new THREE.Raycaster(), []);
+  const pointer = useMemo(() => new THREE.Vector2(), []);
+  const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), []);
+  const intersection = useMemo(() => new THREE.Vector3(), []);
+
+  const pulseColors = useMemo(() => [
+    new THREE.Color('#FFB800'),
+    new THREE.Color('#00F0FF'),
+    new THREE.Color('#FF6F20'),
+    new THREE.Color('#FFD54F'),
+  ], []);
+
+  useEffect(() => {
+    const canvas = gl.domElement;
+
+    const getXY = (e: MouseEvent | Touch) => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        y: -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      };
+    };
+
+    const handlePointerDown = (e: MouseEvent) => {
+      isDragging.current = true;
+      dragStart.current = { x: e.clientX, y: e.clientY };
+      lastPointer.current = { x: e.clientX, y: e.clientY };
+      clickStartTime.current = performance.now();
+    };
+
+    const handlePointerMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      const dx = e.clientX - lastPointer.current.x;
+      const dy = e.clientY - lastPointer.current.y;
+      velocity.current = { x: dx * 0.003, y: dy * 0.003 };
+      targetRotation.current.y += dx * 0.003;
+      targetRotation.current.x += dy * 0.003;
+      targetRotation.current.x = Math.max(-1.2, Math.min(1.2, targetRotation.current.x));
+      lastPointer.current = { x: e.clientX, y: e.clientY };
+    };
+
+    const handlePointerUp = (e: MouseEvent) => {
+      const elapsed = performance.now() - clickStartTime.current;
+      const totalDrag = Math.abs(e.clientX - dragStart.current.x) + Math.abs(e.clientY - dragStart.current.y);
+      isDragging.current = false;
+
+      // If short click with minimal drag → emit shockwave
+      if (elapsed < 300 && totalDrag < 10) {
+        const p = getXY(e);
+        pointer.set(p.x, p.y);
+        raycaster.setFromCamera(pointer, camera as any);
+        plane.normal.copy(camera.position).normalize();
+        plane.constant = -plane.normal.dot(camera.position) + camera.position.length() * 0.5;
+
+        if (raycaster.ray.intersectPlane(plane, intersection)) {
+          const t = clock.getElapsedTime();
+          const idx = (lastPulseIdx.current + 1) % 3;
+          lastPulseIdx.current = idx;
+
+          pulseUniforms.current.uPulsePositions.value[idx].copy(intersection);
+          pulseUniforms.current.uPulseTimes.value[idx] = t;
+          pulseUniforms.current.uPulseColors.value[idx].copy(
+            pulseColors[Math.floor(Math.random() * pulseColors.length)]
+          );
+
+          // Add shockwave for physics
+          shockwaves.current.push({
+            origin: intersection.clone(),
+            time: t,
+            force: 1.5,
+          });
+
+          // Limit stored shockwaves
+          if (shockwaves.current.length > 6) {
+            shockwaves.current = shockwaves.current.slice(-6);
+          }
+        }
+      }
+    };
+
+    // Touch events for mobile
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        isDragging.current = true;
+        dragStart.current = { x: touch.clientX, y: touch.clientY };
+        lastPointer.current = { x: touch.clientX, y: touch.clientY };
+        clickStartTime.current = performance.now();
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isDragging.current || e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      const dx = touch.clientX - lastPointer.current.x;
+      const dy = touch.clientY - lastPointer.current.y;
+      velocity.current = { x: dx * 0.003, y: dy * 0.003 };
+      targetRotation.current.y += dx * 0.003;
+      targetRotation.current.x += dy * 0.003;
+      targetRotation.current.x = Math.max(-1.2, Math.min(1.2, targetRotation.current.x));
+      lastPointer.current = { x: touch.clientX, y: touch.clientY };
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      const elapsed = performance.now() - clickStartTime.current;
+      const ct = e.changedTouches[0];
+      const totalDrag = Math.abs(ct.clientX - dragStart.current.x) + Math.abs(ct.clientY - dragStart.current.y);
+      isDragging.current = false;
+
+      // Tap = shockwave on mobile
+      if (elapsed < 300 && totalDrag < 20) {
+        const rect = canvas.getBoundingClientRect();
+        pointer.x = ((ct.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((ct.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera as any);
+        plane.normal.copy(camera.position).normalize();
+        plane.constant = -plane.normal.dot(camera.position) + camera.position.length() * 0.5;
+
+        if (raycaster.ray.intersectPlane(plane, intersection)) {
+          const t = clock.getElapsedTime();
+          const idx = (lastPulseIdx.current + 1) % 3;
+          lastPulseIdx.current = idx;
+
+          pulseUniforms.current.uPulsePositions.value[idx].copy(intersection);
+          pulseUniforms.current.uPulseTimes.value[idx] = t;
+          pulseUniforms.current.uPulseColors.value[idx].copy(
+            pulseColors[Math.floor(Math.random() * pulseColors.length)]
+          );
+
+          shockwaves.current.push({
+            origin: intersection.clone(),
+            time: t,
+            force: 1.5,
+          });
+          if (shockwaves.current.length > 6) {
+            shockwaves.current = shockwaves.current.slice(-6);
+          }
+        }
+      }
+    };
+
+    canvas.addEventListener('mousedown', handlePointerDown);
+    canvas.addEventListener('mousemove', handlePointerMove);
+    canvas.addEventListener('mouseup', handlePointerUp);
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: true });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: true });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      canvas.removeEventListener('mousedown', handlePointerDown);
+      canvas.removeEventListener('mousemove', handlePointerMove);
+      canvas.removeEventListener('mouseup', handlePointerUp);
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      canvas.removeEventListener('touchmove', handleTouchMove);
+      canvas.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [camera, gl, clock, pointer, raycaster, plane, intersection, pulseColors, pulseUniforms, shockwaves]);
+
+  // Apply inertia rotation to scene
+  useFrame(({ scene }) => {
+    pulseUniforms.current.uTime.value = clock.getElapsedTime();
+
+    // Inertia: when not dragging, velocity decays slowly (cinematic mass)
+    if (!isDragging.current) {
+      targetRotation.current.y += velocity.current.x;
+      targetRotation.current.x += velocity.current.y;
+      targetRotation.current.x = Math.max(-1.2, Math.min(1.2, targetRotation.current.x));
+      velocity.current.x *= 0.96; // slow decay = heavy feel
+      velocity.current.y *= 0.96;
+    }
+
+    // Smooth lerp to target (heavy, cinematic)
+    currentRotation.current.x += (targetRotation.current.x - currentRotation.current.x) * 0.04;
+    currentRotation.current.y += (targetRotation.current.y - currentRotation.current.y) * 0.04;
+
+    scene.rotation.x = currentRotation.current.x;
+    scene.rotation.y = currentRotation.current.y;
+  });
+
+  return null;
+}
+
+/* ── Camera Controller — Parallax + Auto-drift ────────────────────────── */
+function CameraController() {
+  const { camera } = useThree();
+  const angleRef = useRef(0);
+
+  useFrame(({ pointer }) => {
+    angleRef.current += 0.0008;
+    const radius = 28;
+    const baseX = Math.sin(angleRef.current) * radius * 0.1;
+    const baseZ = radius;
+
+    // Smooth mouse parallax with heavy lerp
+    camera.position.x += (baseX + pointer.x * 3 - camera.position.x) * 0.015;
+    camera.position.y += (8 + pointer.y * 2 - camera.position.y) * 0.015;
+    camera.position.z += (baseZ - camera.position.z) * 0.015;
+    camera.lookAt(0, 0, 0);
+  });
+
+  return null;
+}
+
+/* ═══ Main Export ════════════════════════════════════════════════════════ */
+interface NeonRainProps {
+  scrollProgress?: number;
+  particleDensity?: number;
+}
+
+export default function NeonRain(_props: NeonRainProps) {
+  const isMobile = useIsMobile();
+
+  const nodeCount = isMobile ? 80 : 200;
+  const nodes = useMemo(() => generateCrystalNetwork(nodeCount), [nodeCount]);
+
+  const pulseUniforms = useRef({
+    uTime: { value: 0 },
+    uPulsePositions: { value: [
+      new THREE.Vector3(1e3, 1e3, 1e3),
+      new THREE.Vector3(1e3, 1e3, 1e3),
+      new THREE.Vector3(1e3, 1e3, 1e3),
+    ]},
+    uPulseTimes: { value: [-1e3, -1e3, -1e3] },
+    uPulseColors: { value: [
+      new THREE.Color('#FF6E00'),
+      new THREE.Color('#00F0FF'),
+      new THREE.Color('#FF6E00'),
+    ]},
+  });
+
+  const shockwaves = useRef<{ origin: THREE.Vector3; time: number; force: number }[]>([]);
+
+  const dpr: [number, number] = isMobile ? [1, 1] : [1, Math.min(window.devicePixelRatio, 2)];
+
+  return (
+    <Canvas
+      camera={{ position: [0, 8, 28], fov: 65 }}
+      dpr={dpr}
+      gl={{
+        antialias: !isMobile,
+        alpha: true,
+        powerPreference: isMobile ? 'low-power' : 'high-performance',
+        toneMapping: THREE.ACESFilmicToneMapping,
+        toneMappingExposure: 0.85,
+      }}
+      style={{ position: 'absolute', inset: 0, background: '#080808', cursor: 'crosshair' }}
+    >
+      <fog attach="fog" args={['#080808', 30, 120]} />
+
+      <Starfield />
+      <NetworkNodes nodes={nodes} pulseUniforms={pulseUniforms} shockwaves={shockwaves} />
+      <NetworkConnections nodes={nodes} pulseUniforms={pulseUniforms} />
+      <ShockwaveRings shockwaves={shockwaves} />
+      <InteractionController pulseUniforms={pulseUniforms} shockwaves={shockwaves} />
+      <CameraController />
+
+      <EffectComposer>
+        <Bloom
+          intensity={isMobile ? 1.4 : 3.0}
+          luminanceThreshold={0.08}
+          luminanceSmoothing={0.75}
+          mipmapBlur
+          radius={0.85}
+        />
+      </EffectComposer>
+    </Canvas>
+  );
+}

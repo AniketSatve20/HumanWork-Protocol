@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   User,
@@ -6,26 +7,41 @@ import {
   Bell,
   Shield,
   Eye,
-  Palette,
   Save,
   Copy,
   Check,
   ExternalLink,
+  Building2,
+  BadgeCheck,
+  Globe,
+  Hash,
+  MapPin,
+  Users,
+  FileText,
+  Loader2,
 } from 'lucide-react';
 import { Button, Card, Input, Textarea, Badge } from '@/components/common';
 import { useAuthStore } from '@/context/authStore';
-import { formatAddress, copyToClipboard, generateAvatar, cn } from '@/utils/helpers';
+import { copyToClipboard, generateAvatar, cn } from '@/utils/helpers';
 import toast from 'react-hot-toast';
+import type { CompanyDetails } from '@/types';
 
-const tabs = [
-  { id: 'profile', label: 'Profile', icon: User },
-  { id: 'wallet', label: 'Wallet', icon: Wallet },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'privacy', label: 'Privacy & Security', icon: Shield },
-];
+const getTabsForRole = (role?: string) => {
+  const baseTabs = [
+    { id: 'profile', label: 'Profile', icon: User },
+    { id: 'wallet', label: 'Wallet', icon: Wallet },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'privacy', label: 'Privacy & Security', icon: Shield },
+  ];
+  if (role === 'recruiter') {
+    baseTabs.splice(1, 0, { id: 'company', label: 'Company', icon: Building2 });
+  }
+  return baseTabs;
+};
 
 export function SettingsPage() {
   const { user, address, updateUser } = useAuthStore();
+  const tabs = getTabsForRole(user?.role);
   const [activeTab, setActiveTab] = useState('profile');
   const [isSaving, setIsSaving] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -36,6 +52,18 @@ export function SettingsPage() {
   const [email, setEmail] = useState(user?.email || '');
   const [skills, setSkills] = useState<string[]>(user?.skills || []);
   const [newSkill, setNewSkill] = useState('');
+
+  // Company verification state (recruiter only)
+  const [companyDetails, setCompanyDetails] = useState<Partial<CompanyDetails>>({
+    companyName: user?.companyDetails?.companyName || user?.company || '',
+    registrationNumber: user?.companyDetails?.registrationNumber || '',
+    industry: user?.companyDetails?.industry || '',
+    website: user?.companyDetails?.website || '',
+    country: user?.companyDetails?.country || '',
+    employeeCount: user?.companyDetails?.employeeCount || '',
+    description: user?.companyDetails?.description || '',
+  });
+  const [isSubmittingCompany, setIsSubmittingCompany] = useState(false);
 
   // Notification preferences
   const [notifications, setNotifications] = useState({
@@ -49,7 +77,7 @@ export function SettingsPage() {
   const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
-      updateUser({ name, bio, email, skills });
+      await updateUser({ name, bio, email, skills });
       toast.success('Profile updated successfully!');
     } catch (error) {
       toast.error('Failed to update profile');
@@ -76,6 +104,36 @@ export function SettingsPage() {
 
   const handleRemoveSkill = (skill: string) => {
     setSkills(skills.filter((s) => s !== skill));
+  };
+
+  const handleSubmitCompanyVerification = async () => {
+    if (!companyDetails.companyName || !companyDetails.registrationNumber || !companyDetails.industry || !companyDetails.country) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+    setIsSubmittingCompany(true);
+    try {
+      const details: CompanyDetails = {
+        companyName: companyDetails.companyName || '',
+        registrationNumber: companyDetails.registrationNumber || '',
+        industry: companyDetails.industry || '',
+        website: companyDetails.website || '',
+        country: companyDetails.country || '',
+        employeeCount: companyDetails.employeeCount || '',
+        description: companyDetails.description || '',
+        verificationStatus: 'pending',
+        submittedAt: new Date().toISOString(),
+      };
+      await updateUser({
+        company: companyDetails.companyName,
+        companyDetails: details,
+      });
+      toast.success('Company verification submitted! Our team will review your details.');
+    } catch {
+      toast.error('Failed to submit company verification');
+    } finally {
+      setIsSubmittingCompany(false);
+    }
   };
 
   return (
@@ -200,6 +258,196 @@ export function SettingsPage() {
             </motion.div>
           )}
 
+          {/* ── Company Verification Tab (Recruiter Only) ── */}
+          {activeTab === 'company' && user?.role === 'recruiter' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <Card className="p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center">
+                    <Building2 className="w-5 h-5 text-primary-500" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-surface-900">Company Verification</h2>
+                    <p className="text-sm text-surface-500">
+                      Verify your company to earn a trusted recruiter badge
+                    </p>
+                  </div>
+                </div>
+
+                {user?.companyDetails?.verificationStatus === 'verified' ? (
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-6 text-center mb-6">
+                    <BadgeCheck className="w-12 h-12 text-green-500 mx-auto mb-3" />
+                    <h3 className="text-lg font-semibold text-surface-900 mb-1">Company Verified</h3>
+                    <p className="text-sm text-surface-500 mb-3">
+                      {user.companyDetails.companyName} is a verified company on HumanWork Protocol.
+                    </p>
+                    <Badge variant="success" className="gap-1">
+                      <BadgeCheck className="w-3.5 h-3.5" />
+                      Verified Recruiter
+                    </Badge>
+                  </div>
+                ) : user?.companyDetails?.verificationStatus === 'pending' ? (
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 text-center mb-6">
+                    <Loader2 className="w-12 h-12 text-amber-500 mx-auto mb-3 animate-spin" />
+                    <h3 className="text-lg font-semibold text-surface-900 mb-1">Verification In Progress</h3>
+                    <p className="text-sm text-surface-500">
+                      Your company details are being reviewed. This usually takes 1-2 business days.
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="space-y-5">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                        <Building2 className="w-3.5 h-3.5 inline mr-1" />
+                        Company Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={companyDetails.companyName || ''}
+                        onChange={(e) => setCompanyDetails({ ...companyDetails, companyName: e.target.value })}
+                        placeholder="Acme Corp"
+                        className="input w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                        <Hash className="w-3.5 h-3.5 inline mr-1" />
+                        Registration Number *
+                      </label>
+                      <input
+                        type="text"
+                        value={companyDetails.registrationNumber || ''}
+                        onChange={(e) => setCompanyDetails({ ...companyDetails, registrationNumber: e.target.value })}
+                        placeholder="e.g., CIN / GST / EIN"
+                        className="input w-full"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                        <FileText className="w-3.5 h-3.5 inline mr-1" />
+                        Industry *
+                      </label>
+                      <select
+                        value={companyDetails.industry || ''}
+                        onChange={(e) => setCompanyDetails({ ...companyDetails, industry: e.target.value })}
+                        className="input w-full"
+                      >
+                        <option value="">Select Industry</option>
+                        <option value="technology">Technology</option>
+                        <option value="finance">Finance & Banking</option>
+                        <option value="healthcare">Healthcare</option>
+                        <option value="education">Education</option>
+                        <option value="ecommerce">E-Commerce</option>
+                        <option value="media">Media & Entertainment</option>
+                        <option value="consulting">Consulting</option>
+                        <option value="manufacturing">Manufacturing</option>
+                        <option value="real-estate">Real Estate</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                        <MapPin className="w-3.5 h-3.5 inline mr-1" />
+                        Country *
+                      </label>
+                      <input
+                        type="text"
+                        value={companyDetails.country || ''}
+                        onChange={(e) => setCompanyDetails({ ...companyDetails, country: e.target.value })}
+                        placeholder="e.g., United States"
+                        className="input w-full"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                        <Globe className="w-3.5 h-3.5 inline mr-1" />
+                        Website
+                      </label>
+                      <input
+                        type="url"
+                        value={companyDetails.website || ''}
+                        onChange={(e) => setCompanyDetails({ ...companyDetails, website: e.target.value })}
+                        placeholder="https://company.com"
+                        className="input w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                        <Users className="w-3.5 h-3.5 inline mr-1" />
+                        Employee Count
+                      </label>
+                      <select
+                        value={companyDetails.employeeCount || ''}
+                        onChange={(e) => setCompanyDetails({ ...companyDetails, employeeCount: e.target.value })}
+                        className="input w-full"
+                      >
+                        <option value="">Select Size</option>
+                        <option value="1-10">1-10</option>
+                        <option value="11-50">11-50</option>
+                        <option value="51-200">51-200</option>
+                        <option value="201-500">201-500</option>
+                        <option value="501-1000">501-1000</option>
+                        <option value="1000+">1000+</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                      Company Description
+                    </label>
+                    <textarea
+                      value={companyDetails.description || ''}
+                      onChange={(e) => setCompanyDetails({ ...companyDetails, description: e.target.value })}
+                      placeholder="Brief description of your company and what you do..."
+                      rows={3}
+                      className="input w-full"
+                    />
+                  </div>
+
+                  <div className="bg-surface-50 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                      <Shield className="w-5 h-5 text-primary-500 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-surface-900 text-sm">Why verify?</p>
+                        <ul className="text-sm text-surface-500 space-y-1 mt-1">
+                          <li>• Get a verified recruiter badge on your profile</li>
+                          <li>• Build trust with freelancers</li>
+                          <li>• Access verified talent pool with skill badges</li>
+                          <li>• Priority support and enterprise features</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <Button
+                      onClick={handleSubmitCompanyVerification}
+                      isLoading={isSubmittingCompany}
+                      disabled={user?.companyDetails?.verificationStatus === 'verified'}
+                    >
+                      <BadgeCheck className="w-4 h-4" />
+                      {user?.companyDetails?.verificationStatus === 'pending'
+                        ? 'Update Submission'
+                        : 'Submit for Verification'}
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+          )}
+
           {activeTab === 'wallet' && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -242,6 +490,15 @@ export function SettingsPage() {
                         {user?.isVerifiedHuman ? 'Verified Human' : 'Not Verified'}
                       </p>
                     </div>
+                    {!user?.isVerifiedHuman && (
+                      <Link
+                        to="/kyc"
+                        className="mt-3 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors"
+                      >
+                        <Shield className="w-4 h-4" />
+                        Get Verified
+                      </Link>
+                    )}
                   </div>
 
                   <a

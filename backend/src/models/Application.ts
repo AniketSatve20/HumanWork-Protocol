@@ -20,13 +20,16 @@ const ApplicationSchema = new Schema<IApplication>(
   {
     jobId: { type: Number, required: true, index: true },
     freelancerAddress: { type: String, required: true },
-    freelancerAddressLower: { type: String, index: true },
+    freelancerAddressLower: { type: String, index: true, select: false },
     coverLetter: { type: String, required: true },
     proposedAmount: { type: String, required: true },
     estimatedDuration: { type: String, required: true },
     status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending', index: true },
   },
-  { timestamps: true }
+  { timestamps: true,
+    toJSON: { virtuals: true, versionKey: false },
+    toObject: { virtuals: true, versionKey: false },
+  }
 );
 
 ApplicationSchema.pre('save', function (next) {
