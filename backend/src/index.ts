@@ -45,7 +45,7 @@ const globalLimiter = rateLimit({
   message: { success: false, error: 'Too many requests, please try again later.' },
 });
 
-// Stricter rate limit for auth endpoints: 10 requests per 15 minutes
+// Stricter rate limit for auth endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
@@ -55,7 +55,7 @@ const authLimiter = rateLimit({
   message: { success: false, error: 'Too many auth attempts, please try again later.' },
 });
 
-// Rate limit for write endpoints: 30 requests per 15 minutes
+// Rate limit for write endpoints
 const writeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
@@ -65,13 +65,27 @@ const writeLimiter = rateLimit({
   message: { success: false, error: 'Too many requests, please try again later.' },
 });
 
-// ── Standard Middleware ───────────────────────────────────────────────────────
-const corsOptions = {
-  origin: [
-    'http://localhost:5173',
-    'https://worq-4fnha5wbz-aniketsatve-1473s-projects.vercel.app',
-    'https://worq-roan.vercel.app', // Adding the alias just in case
-  ],
+// ── Dynamic CORS Configuration ───────────────────────────────────────────────
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://worq-roan.vercel.app'
+];
+
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+
+    const isAllowedOrigin = allowedOrigins.includes(origin);
+    const isVercelPreview = origin.endsWith('vercel.app') && origin.includes('aniketsatve-1473s-projects');
+
+    if (isAllowedOrigin || isVercelPreview) {
+      callback(null, true);
+    } else {
+      logger.error(`CORS blocked for origin: ${origin}`);
+      callback(new Error(`CORS blocked for origin: ${origin}`));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -79,15 +93,17 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
+
+// ── Standard Middleware ───────────────────────────────────────────────────────
 app.use(globalLimiter);
 app.use(cookieParser());
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// NoSQL injection prevention — strip $operators from all inputs
+// NoSQL injection prevention
 app.use(mongoSanitize);
 
-// Health check — includes DB status
+// Health check
 app.get('/health', (_req, res) => {
   const db = getConnectionState();
   res.json({ 
@@ -116,6 +132,10 @@ app.use((_req, res) => {
 
 // Error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  // If it's a CORS error, we want to return a 403 instead of a 500
+  if (err.message && err.message.includes('CORS blocked')) {
+    return res.status(403).json({ success: false, error: err.message });
+  }
   logger.error('Unhandled error:', err);
   res.status(500).json({ success: false, error: 'Internal server error' });
 });
@@ -123,21 +143,18 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 // Start server
 async function startServer() {
   try {
-    // Connect to MongoDB (optional - will warn if not configured)
     try {
       await connectDatabase();
     } catch (dbError) {
       logger.warn('⚠️ MongoDB connection failed. Running without database.');
     }
 
-    // Start HTTP + WebSocket server
     httpServer.listen(config.port, () => {
       logger.info(`🚀 Server running on http://localhost:${config.port}`);
       logger.info(`🔌 Socket.IO ready for real-time messaging`);
       logger.info(`📍 Environment: ${config.nodeEnv}`);
     });
 
-    // Start background workers
     await oracleWorker.start();
     await projectEventListener.start();
 
