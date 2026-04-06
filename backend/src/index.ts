@@ -27,6 +27,7 @@ import { oracleWorker } from './workers/oracle.worker.js';
 import { projectEventListener } from './workers/projectEvent.worker.js';
 
 const app = express();
+app.set('trust proxy', 1);
 const httpServer = createServer(app);
 
 // Initialize Socket.IO
