@@ -35,7 +35,7 @@ setupSocket(httpServer);
 // ── Security Middleware ───────────────────────────────────────────────────────
 app.use(helmet());
 
-// Global rate limit: 1000 requests per 15 minutes per IP
+// Global rate limit
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1000,
@@ -45,7 +45,6 @@ const globalLimiter = rateLimit({
   message: { success: false, error: 'Too many requests, please try again later.' },
 });
 
-// Stricter rate limit for auth endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
@@ -55,7 +54,6 @@ const authLimiter = rateLimit({
   message: { success: false, error: 'Too many auth attempts, please try again later.' },
 });
 
-// Rate limit for write endpoints
 const writeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
@@ -65,7 +63,7 @@ const writeLimiter = rateLimit({
   message: { success: false, error: 'Too many requests, please try again later.' },
 });
 
-// ── Dynamic CORS Configuration ───────────────────────────────────────────────
+// ── Refined Dynamic CORS Configuration ───────────────────────────────────────
 const allowedOrigins = [
   'http://localhost:5173',
   'https://worq-roan.vercel.app'
@@ -73,25 +71,34 @@ const allowedOrigins = [
 
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl)
+    // Allow requests with no origin (like mobile apps, Postman, or curl)
     if (!origin) return callback(null, true);
 
-    const isAllowedOrigin = allowedOrigins.includes(origin);
-    const isVercelPreview = origin.endsWith('vercel.app') && origin.includes('aniketsatve-1473s-projects');
+    const lowerOrigin = origin.toLowerCase();
+    const isAllowedOrigin = allowedOrigins.includes(lowerOrigin);
+    
+    // Check for any Vercel preview URL related to your specific account/project
+    const isVercelPreview = lowerOrigin.endsWith('.vercel.app') && 
+                            lowerOrigin.includes('aniketsatve-1473s-projects');
 
     if (isAllowedOrigin || isVercelPreview) {
       callback(null, true);
     } else {
-      logger.error(`CORS blocked for origin: ${origin}`);
+      // Log the specific origin that was blocked for debugging
+      logger.warn(`CORS attempt blocked for origin: ${origin}`);
       callback(new Error(`CORS blocked for origin: ${origin}`));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
+// Apply CORS to all routes
 app.use(cors(corsOptions));
+// Specifically handle pre-flight (OPTIONS) requests globally
 app.options('*', cors(corsOptions));
 
 // ── Standard Middleware ───────────────────────────────────────────────────────
@@ -123,7 +130,7 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/messages', writeLimiter, messagesRoutes);
 app.use('/api/kyc', writeLimiter, kycRoutes);
 app.use('/api/analytics', analyticsRoutes);
-app.use('/api/analytics', radarRoutes);
+app.use('/api/radar', radarRoutes);
 
 // 404 handler
 app.use((_req, res) => {
@@ -132,7 +139,6 @@ app.use((_req, res) => {
 
 // Error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  // If it's a CORS error, we want to return a 403 instead of a 500
   if (err.message && err.message.includes('CORS blocked')) {
     return res.status(403).json({ success: false, error: err.message });
   }
@@ -150,7 +156,7 @@ async function startServer() {
     }
 
     httpServer.listen(config.port, () => {
-      logger.info(`🚀 Server running on http://localhost:${config.port}`);
+      logger.info(`🚀 Server running on port ${config.port}`);
       logger.info(`🔌 Socket.IO ready for real-time messaging`);
       logger.info(`📍 Environment: ${config.nodeEnv}`);
     });
