@@ -1,5 +1,4 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { config } from '@/utils/config';
 import type { Job, JobApplication, Conversation, Message, ApiResponse, Milestone, JobStatus, UserRole } from '@/types';
 
 // Map backend JobListing to frontend Job
@@ -81,7 +80,7 @@ class ApiService {
 
   constructor() {
     this.client = axios.create({
-      baseURL: config.apiUrl,
+      baseURL: import.meta.env.VITE_API_URL,
       withCredentials: true,
       headers: {
         'Content-Type': 'application/json',

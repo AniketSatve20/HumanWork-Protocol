@@ -66,29 +66,15 @@ const writeLimiter = rateLimit({
 });
 
 // ── Standard Middleware ───────────────────────────────────────────────────────
-const configuredCorsOrigins = new Set(config.corsOrigin);
-const localhostOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-
 const corsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    if (!origin) {
-      callback(null, true);
-      return;
-    }
-
-    if (configuredCorsOrigins.has(origin)) {
-      callback(null, true);
-      return;
-    }
-
-    if (config.nodeEnv !== 'production' && localhostOriginPattern.test(origin)) {
-      callback(null, true);
-      return;
-    }
-
-    callback(new Error(`CORS blocked for origin: ${origin}`));
-  },
+  origin: [
+    'http://localhost:5173',
+    'https://worq-4fnha5wbz-aniketsatve-1473s-projects.vercel.app',
+    'https://worq-roan.vercel.app', // Adding the alias just in case
+  ],
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
 app.use(cors(corsOptions));
